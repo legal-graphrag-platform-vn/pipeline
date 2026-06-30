@@ -156,6 +156,40 @@ Kết quả sau fix: đúng 3/3 Điều, đúng 28/28 khoản trong Điều 1 (k
 đúng 4/4 điểm (a, b, c, d) trong khoản 1 — hết over-segmentation. 28/28 unit test
 vẫn pass (không phá vỡ case nào khác).
 
+### A8. Chạy thử Step 2 (LLM Extraction) lần đầu — 2 lỗi thực tế
+
+**Lỗi 1 — `ValueError: additionalProperties is only supported in Gemini Enterprise
+Agent Platform mode, not in Gemini Developer API mode`**: `ExtractedEntity` (
+`extraction/models.py`) có field `properties: dict = Field(default_factory=dict)`
+theo đúng spec `ENTITY_SCHEMA` trong `plans/04_graph_construction_pipeline.md`
+(`"properties": {}` — object mở, không khai báo trước key). Khi dùng Pydantic
+model này làm `response_schema` cho Gemini structured output, `google-genai` sinh
+JSON Schema có `additionalProperties`, mà **Gemini Developer API (free tier) không
+hỗ trợ object schema mở** (chỉ Enterprise/Vertex AI mới hỗ trợ) — lỗi ngay khi gọi
+`generate_content()`, trước khi tới được model.
+
+**Fix**: bỏ field `properties` khỏi `ExtractedEntity` — kiểm tra toàn bộ codebase
+(`grep -rn "\.properties"`) xác nhận không có chỗ nào đọc field này (validator,
+scorer, orchestrator đều không dùng), nên bỏ an toàn, không mất dữ liệu nào đang
+thực sự được dùng. Lưu ý: đây là giới hạn kỹ thuật thật của Gemini Developer API,
+không phải lỗi logic — nếu sau này cần entity properties tự do, phải đổi sang
+dạng `list[KeyValue]` (object có schema cố định) thay vì `dict` mở.
+
+**Lỗi 2 — `429 RESOURCE_EXHAUSTED` (quota free tier hết)**: sau khi fix lỗi 1, gọi
+`extract` thật vài lần liên tiếp (mỗi lần 3 Điều × 2 pass = 6 request, cộng thêm
+vài lần gọi chẩn đoán) gặp `503 UNAVAILABLE` rồi cuối cùng lộ lỗi thật:
+`generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash` —
+**free tier Gemini Developer API giới hạn 20 request/ngày cho mỗi project x
+model**. Các lỗi `503` trước đó nhiều khả năng cũng do áp lực gần ngưỡng quota,
+Google trả nhầm "high demand" thay vì quota rõ ràng. Xác nhận bằng cách gọi
+`generate_content` đơn giản (không `response_schema`) thành công ngay — loại trừ
+khả năng lỗi do key/model/kích thước input.
+
+**Quyết định**: không sửa code (đây là giới hạn hạ tầng phía Google, không phải
+bug) — dừng gọi thêm API trong ngày, đợi quota reset (chu kỳ 24h theo Google), thử
+lại sau. Production thật sẽ cần plan trả phí hoặc batch/throttle request để tránh
+chạm quota free tier.
+
 ---
 
 ## B. Quyết định kỹ thuật & Lý do

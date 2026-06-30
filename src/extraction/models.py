@@ -33,7 +33,6 @@ class ExtractedEntity(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9_]+$", description="unique, snake_case")
     type: EntityType
     label: str = Field(min_length=1)
-    properties: dict = Field(default_factory=dict)
 
 
 class EntityExtractionResult(BaseModel):
