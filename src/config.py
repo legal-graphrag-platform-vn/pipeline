@@ -16,8 +16,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    llm_provider: str = Field(default="gemini", description="LLM provider: gemini|minimax|qwen|openai")
+
+    # Gemini
     gemini_api_key: str = Field(default="", description="API key cho Gemini, lấy tại aistudio.google.com/apikey")
     gemini_model: str = Field(default="gemini-2.5-flash")
+
+    # MiniMax
+    minimax_api_key: str = Field(default="")
+    minimax_model: str = Field(default="MiniMax-Text-01")
+    minimax_base_url: str = Field(default="https://api.minimax.io/v1")
+
+    # Qwen
+    qwen_api_key: str = Field(default="")
+    qwen_model: str = Field(default="qwen-plus")
+    qwen_base_url: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+    # Generic OpenAI
+    openai_api_key: str = Field(default="")
+    openai_model: str = Field(default="")
+    openai_base_url: str = Field(default="")
 
     data_raw_dir: Path = Field(default=Path("data/raw"))
     data_processed_dir: Path = Field(default=Path("data/processed"))
@@ -35,13 +53,33 @@ class Settings(BaseSettings):
     )
 
     def require_gemini_api_key(self) -> str:
-        """Trả về API key hoặc raise lỗi rõ ràng nếu thiếu (dùng trước khi gọi LLM)."""
+        """Trả về API key hoặc raise lỗi rõ ràng nếu thiếu (dành cho backward compatibility)."""
         if not self.gemini_api_key:
             raise RuntimeError(
                 "Thiếu GEMINI_API_KEY. Lấy key tại https://aistudio.google.com/apikey "
                 "rồi đặt vào file .env (xem .env.example)."
             )
         return self.gemini_api_key
+
+    def require_api_key(self) -> str:
+        """Trả về API key tương ứng với provider hiện tại."""
+        provider = self.llm_provider.lower()
+        if provider == "gemini":
+            return self.require_gemini_api_key()
+        elif provider == "minimax":
+            if not self.minimax_api_key:
+                raise RuntimeError("Thiếu MINIMAX_API_KEY trong file .env.")
+            return self.minimax_api_key
+        elif provider == "qwen":
+            if not self.qwen_api_key:
+                raise RuntimeError("Thiếu QWEN_API_KEY trong file .env.")
+            return self.qwen_api_key
+        elif provider == "openai":
+            if not self.openai_api_key:
+                raise RuntimeError("Thiếu OPENAI_API_KEY trong file .env.")
+            return self.openai_api_key
+        else:
+            raise ValueError(f"LLM provider '{self.llm_provider}' không hợp lệ.")
 
 
 settings = Settings()

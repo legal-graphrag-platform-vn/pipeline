@@ -58,13 +58,17 @@ def parse(
     doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")],
     pdf: Annotated[
         Path | None,
-        typer.Option(help="Parse trực tiếp từ file PDF (vd PDF gốc tải tay) thay vì source.txt crawl được."),
+        typer.Option(help="Parse trực tiếp từ file PDF (vd PDF gốc tải tay) thay vì source.txt cào được."),
+    ] = None,
+    txt: Annotated[
+        Path | None,
+        typer.Option(help="Parse trực tiếp từ file text (.txt) tự chọn."),
     ] = None,
     number: Annotated[
-        str | None, typer.Option(help="Số hiệu văn bản (chỉ cần khi dùng --pdf và chưa có metadata.json)")
+        str | None, typer.Option(help="Số hiệu văn bản (chỉ cần khi dùng --pdf hoặc --txt mà chưa có metadata.json)")
     ] = None,
     title: Annotated[
-        str | None, typer.Option(help="Tiêu đề văn bản (chỉ cần khi dùng --pdf và chưa có metadata.json)")
+        str | None, typer.Option(help="Tiêu đề văn bản (chỉ cần khi dùng --pdf hoặc --txt mà chưa có metadata.json)")
     ] = None,
     backend: Annotated[
         str,
@@ -74,16 +78,16 @@ def parse(
     """Parse văn bản -> data/processed/<doc_id>/hierarchy.json.
 
     Mặc định đọc data/raw/<doc_id>/source.txt (output của `crawl`, lấy từ HTML body).
-    Dùng `--pdf <path>` để parse trực tiếp từ file PDF (vd PDF gốc .signed.pdf tải tay
-    từ vbpl.vn) — tự động OCR (Tesseract) nếu PDF là bản scan không có text layer.
+    Dùng `--pdf <path>` để parse trực tiếp từ file PDF.
+    Dùng `--txt <path>` để parse trực tiếp từ file text (.txt).
     """
     raw_dir = _raw_dir(doc_id)
     metadata_path = raw_dir / "metadata.json"
 
-    if pdf is not None:
+    def get_doc_info() -> DocumentInfo:
         if metadata_path.exists():
             meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-            doc_info = DocumentInfo(
+            return DocumentInfo(
                 id=meta["doc_id"],
                 title=meta["title"],
                 number=meta["number"],
@@ -97,37 +101,36 @@ def parse(
         else:
             if not number:
                 typer.echo(
-                    f"Không có {metadata_path} — cần truyền --number (và tuỳ chọn --title) khi dùng --pdf.",
+                    "Không có metadata.json — cần truyền --number (và tuỳ chọn --title) khi dùng --pdf hoặc --txt.",
                     err=True,
                 )
                 raise typer.Exit(code=1)
-            doc_info = DocumentInfo(
+            return DocumentInfo(
                 id=doc_id,
                 title=title or doc_id,
                 number=number,
                 doc_type="Law",
                 status="active",
             )
+
+    if pdf is not None:
+        doc_info = get_doc_info()
         parsed = parse_pdf(str(pdf), doc_info, backend=backend)
+    elif txt is not None:
+        if not txt.exists():
+            typer.echo(f"File text không tồn tại: {txt}", err=True)
+            raise typer.Exit(code=1)
+        doc_info = get_doc_info()
+        text = txt.read_text(encoding="utf-8")
+        parsed = parse_text(text, doc_info)
     else:
         source_path = raw_dir / "source.txt"
         if not source_path.exists() or not metadata_path.exists():
-            typer.echo(f"Thiếu {source_path} hoặc {metadata_path} — chạy `crawl` trước (hoặc dùng --pdf).", err=True)
+            typer.echo(f"Thiếu {source_path} hoặc {metadata_path} — chạy `crawl` trước (hoặc dùng --pdf / --txt).", err=True)
             raise typer.Exit(code=1)
 
         text = source_path.read_text(encoding="utf-8")
-        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-        doc_info = DocumentInfo(
-            id=meta["doc_id"],
-            title=meta["title"],
-            number=meta["number"],
-            doc_type=meta["doc_type"],
-            issued_by=meta.get("issued_by"),
-            issued_date=meta.get("issued_date"),
-            effective_from=meta.get("effective_from"),
-            effective_to=meta.get("effective_to"),
-            status=meta.get("status", "active"),
-        )
+        doc_info = get_doc_info()
         parsed = parse_text(text, doc_info)
 
     out_dir = _processed_dir(doc_id)
