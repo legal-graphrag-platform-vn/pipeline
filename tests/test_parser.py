@@ -100,3 +100,29 @@ def test_parse_pdf_forces_no_ocr() -> None:
         assert len(parsed.articles) == 1
         assert parsed.articles[0].number == 1
 
+
+def test_clean_vietnamese_spacing() -> None:
+    from src.parser.hierarchy_parser import clean_vietnamese_spacing
+    
+    assert clean_vietnamese_spacing("Công ty trách nhi ệm h ữu h ạn") == "Công ty trách nhiệm hữu hạn"
+    assert clean_vietnamese_spacing("hợp cuộc họp được triệu tập t heo quy định") == "hợp cuộc họp được triệu tập theo quy định"
+    assert clean_vietnamese_spacing("Người qu ản lý doanh nghi ệp là người") == "Người quản lý doanh nghiệp là người"
+    assert clean_vietnamese_spacing("điểm a, b, c, d, đ và e") == "điểm a, b, c, d, đ và e"
+    assert clean_vietnamese_spacing("luật t rên p háp luật nước c ộng hòa xã hội") == "luật trên pháp luật nước cộng hòa xã hội"
+
+
+def test_should_skip_line() -> None:
+    from src.parser.hierarchy_parser import should_skip_line
+
+    assert should_skip_line("4") is True
+    assert should_skip_line("123") is True
+    assert should_skip_line("Ký bởi: Cổng Thông tin điện tử Chính phủ") is True
+    assert should_skip_line("Email: thongtinchinhphu@chinhphu.vn") is True
+    assert should_skip_line("Cơ quan: Văn phòng Chính phủ") is True
+    assert should_skip_line("Thời gian ký: 19.01.2015 08:56:24 +07:00") is True
+    assert should_skip_line("CÔNG BÁO/Số 1175 + 1176/Ngày 30-12-2014") is True
+    assert should_skip_line("Điều 1. Phạm vi điều chỉnh") is False
+    assert should_skip_line("1. Các doanh nghiệp.") is False
+
+
+

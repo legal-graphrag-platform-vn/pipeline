@@ -22,10 +22,10 @@ UPPERCASE_TITLE_RE = re.compile(
 ARTICLE_RE = re.compile(r"^Điều\s+(\d+)\.\s*(.*)$")
 
 # Pattern nhận diện dòng bắt đầu một Khoản luật (ví dụ: "1. ", "2. ").
-CLAUSE_RE = re.compile(r"^(\d+)\.\s+(.*)$")
+CLAUSE_RE = re.compile(r"^(\d+)\.\s*(.*)$")
 
 # Pattern nhận diện dòng bắt đầu một Điểm luật (ví dụ: "a) ", "b) ").
-POINT_RE = re.compile(r"^([a-zđ])\)\s+(.*)$")
+POINT_RE = re.compile(r"^([a-zđ])\)\s*(.*)$")
 
 # Pattern nhận diện dòng tiêu đề Chương dạng số La Mã (ví dụ: "Chương II").
 CHAPTER_RE = re.compile(r"^Chương\s+([IVXLCDM]+)\s*$", re.IGNORECASE)
