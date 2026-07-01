@@ -34,14 +34,17 @@ logger = logging.getLogger(__name__)
 app = typer.Typer(help="Legal GraphRAG — Graph Construction Pipeline (Milestone 1+2)")
 
 
+# Lấy đường dẫn thư mục lưu trữ dữ liệu thô (raw data) của văn bản.
 def _raw_dir(doc_id: str) -> Path:
     return settings.data_raw_dir / doc_id
 
 
+# Lấy đường dẫn thư mục lưu trữ dữ liệu đã xử lý (processed data) của văn bản.
 def _processed_dir(doc_id: str) -> Path:
     return settings.data_processed_dir / doc_id
 
 
+# Lệnh CLI để cào thông tin chi tiết và nội dung văn bản pháp luật từ trang vbpl.vn.
 @app.command()
 def crawl(
     url: Annotated[str, typer.Option(help="URL trang chi tiết vbpl.vn")],
@@ -53,6 +56,7 @@ def crawl(
     typer.echo(f"Đã crawl {doc_id}: {metadata.title} ({metadata.status})")
 
 
+# Lệnh CLI để phân tách cấu trúc văn bản pháp luật (Chương/Điều/Khoản/Điểm) từ file thô, PDF hoặc Text.
 @app.command()
 def parse(
     doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")],
@@ -91,6 +95,7 @@ def parse(
     raw_dir = _raw_dir(doc_id)
     metadata_path = raw_dir / "metadata.json"
 
+    # Đọc thông tin metadata của văn bản từ file json hoặc khởi tạo thông tin mặc định.
     def get_doc_info() -> DocumentInfo:
         if metadata_path.exists():
             meta = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -148,6 +153,7 @@ def parse(
     typer.echo(f"Parsed {doc_id}: {len(parsed.articles)} Điều -> {out_dir / 'hierarchy.json'}")
 
 
+# Lệnh CLI để trích xuất thực thể, quan hệ từ cấu trúc đã phân tách sử dụng mô hình LLM.
 @app.command()
 def extract(doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")]) -> None:
     """Chạy LLM Extraction + Validation + Scoring trên hierarchy.json đã parse."""
@@ -170,6 +176,7 @@ def extract(doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'"
     )
 
 
+# Lệnh CLI để chạy toàn bộ luồng tích hợp: cào dữ liệu, phân tách cấu trúc và trích xuất tri thức.
 @app.command()
 def ingest(
     url: Annotated[str, typer.Option(help="URL trang chi tiết vbpl.vn")],
