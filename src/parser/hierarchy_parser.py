@@ -108,10 +108,33 @@ class _ArticleBuilder:
     clauses: list[Clause] = field(default_factory=list)
 
     def to_article(self) -> Article:
+        # Tái tạo content_raw sạch bằng cách nối các dòng tiếp nối bằng dấu cách,
+        # và chỉ dùng dấu xuống dòng '\n' trước các Khoản/Điểm mới.
+        joined_lines = []
+        for line in self.content_lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            
+            from src.parser.patterns import match_clause, match_point
+            
+            is_new_element = (
+                not joined_lines or 
+                (self.title is not None and len(joined_lines) == 1) or 
+                match_clause(line_str) is not None or 
+                match_point(line_str) is not None
+            )
+            
+            if is_new_element:
+                joined_lines.append(line_str)
+            else:
+                joined_lines[-1] = f"{joined_lines[-1]} {line_str}".strip()
+                
+        content_raw = "\n".join(joined_lines)
         return Article(
             number=self.number,
             title=self.title,
-            content_raw="\n".join(self.content_lines).strip(),
+            content_raw=content_raw,
             chapter=self.chapter,
             chapter_title=self.chapter_title,
             clauses=self.clauses,
