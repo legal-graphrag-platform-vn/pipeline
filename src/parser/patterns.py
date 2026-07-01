@@ -13,6 +13,11 @@ ARTICLE_RE_LENIENT = re.compile(r"^[^\wĐ]{0,2}Điều\s+(\d+)\.\s*(.*)$")
 
 #===================================================================================================
 
+# Pattern nhận diện dòng in hoa toàn bộ có dấu tiếng Việt (dùng làm heuristic cho tên Chương).
+UPPERCASE_TITLE_RE = re.compile(
+    r"^[A-ZĐÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ0-9 ,.\-]+$"
+)
+
 # Pattern nhận diện dòng bắt đầu một Điều luật chính xác (không chứa ký tự nhiễu).
 ARTICLE_RE = re.compile(r"^Điều\s+(\d+)\.\s*(.*)$")
 
@@ -25,10 +30,6 @@ POINT_RE = re.compile(r"^([a-zđ])\)\s+(.*)$")
 # Pattern nhận diện dòng tiêu đề Chương dạng số La Mã (ví dụ: "Chương II").
 CHAPTER_RE = re.compile(r"^Chương\s+([IVXLCDM]+)\s*$", re.IGNORECASE)
 
-# Pattern nhận diện dòng in hoa toàn bộ có dấu tiếng Việt (dùng làm heuristic cho tên Chương).
-UPPERCASE_TITLE_RE = re.compile(
-    r"^[A-ZĐÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ0-9 ,.\-]+$"
-)
 
 
 # Thực hiện khớp và bóc tách thông tin Điều luật (số thứ tự và nội dung).
