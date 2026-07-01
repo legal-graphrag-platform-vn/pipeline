@@ -74,6 +74,13 @@ def parse(
         str,
         typer.Option(help="Backend trích PDF: 'auto' (PyMuPDF, tự OCR nếu cần) hoặc 'pypdf' (text layer thật)."),
     ] = "auto",
+    ocr: Annotated[
+        bool,
+        typer.Option(
+            "--ocr/--no-ocr",
+            help="Sử dụng OCR (Tesseract) đối với bản PDF scan (True), hoặc trích xuất từ text layer gốc (False).",
+        ),
+    ] = False,
 ) -> None:
     """Parse văn bản -> data/processed/<doc_id>/hierarchy.json.
 
@@ -115,7 +122,7 @@ def parse(
 
     if pdf is not None:
         doc_info = get_doc_info()
-        parsed = parse_pdf(str(pdf), doc_info, backend=backend)
+        parsed = parse_pdf(str(pdf), doc_info, backend=backend, use_ocr=ocr)
     elif txt is not None:
         if not txt.exists():
             typer.echo(f"File text không tồn tại: {txt}", err=True)

@@ -291,52 +291,35 @@ def extract_lines_via_pypdf(pdf_path: str) -> list[LineRecord]:
 def parse_pdf(
     pdf_path: str,
     document: DocumentInfo,
-    use_ocr: bool | None = None,
+    use_ocr: bool = False,
     backend: str = "auto",
 ) -> ParsedDocument:
     """Parse trực tiếp từ file PDF -> ParsedDocument.
 
     `backend`:
-      - "auto" (mặc định): dùng PyMuPDF (`extract_lines_with_font`) trừ khi `use_ocr=True`.
+      - "auto" (mặc định): dùng PyMuPDF (`extract_lines_with_font`) nếu `use_ocr=False`.
       - "pypdf": dùng `extract_lines_via_pypdf` (PDF có text layer thật, không OCR).
 
-    `use_ocr` (chỉ áp dụng khi `backend="auto"`):
-      - None (mặc định): tự phát hiện — nếu PDF có text layer (vd export từ Word/HTML)
-        dùng `extract_lines_with_font`; nếu gần như không có text (PDF scan/ảnh, trường
-        hợp các văn bản gốc .signed.pdf tải từ vbpl.vn) tự động fallback sang OCR.
-      - True: ép buộc OCR. False: ép buộc dùng text layer (không OCR).
-
-    Không crash khi gặp trang lỗi/encoding lạ — log warning và bỏ qua dòng đó,
-    vì exit criteria Milestone 1 yêu cầu "parser chạy không crash trên văn bản dài".
+    `use_ocr`:
+      - True: chạy OCR (Tesseract).
+      - False: dùng text layer thông thường (không OCR).
     """
-    used_ocr = False
-    if backend == "pypdf":
+    if use_ocr:
+        logger.info("Chạy OCR (Tesseract) cho PDF: %s", pdf_path)
+        records = extract_lines_via_ocr(pdf_path)
+    elif backend == "pypdf":
+        logger.info("Trích xuất text layer bằng pypdf cho PDF: %s", pdf_path)
         records = extract_lines_via_pypdf(pdf_path)
     else:
+        logger.info("Trích xuất text layer bằng PyMuPDF cho PDF: %s", pdf_path)
         try:
-            records = extract_lines_with_font(pdf_path) if use_ocr is not True else []
+            records = extract_lines_with_font(pdf_path)
         except Exception:
-            logger.exception("Lỗi khi extract PDF %s", pdf_path)
+            logger.exception("Lỗi khi trích xuất PDF bằng PyMuPDF %s", pdf_path)
             raise
 
-        total_chars = sum(len(r.text) for r in records)
-        if use_ocr is None:
-            import fitz
-
-            with fitz.open(pdf_path) as doc:
-                page_count = doc.page_count
-            avg_chars_per_page = total_chars / max(page_count, 1)
-            use_ocr = avg_chars_per_page < 50
-
-        if use_ocr:
-            logger.info(
-                "PDF %s không có text layer đủ dùng (hoặc use_ocr=True) — chạy OCR (Tesseract).", pdf_path
-            )
-            records = extract_lines_via_ocr(pdf_path)
-            used_ocr = True
-
     lines = [r.text for r in records]
-    articles = parse_lines(lines, lenient_article=used_ocr)
+    articles = parse_lines(lines, lenient_article=use_ocr)
     if not articles:
         logger.warning("Không tìm thấy Điều nào trong %s — kiểm tra PDF có text layer/OCR đúng không.", pdf_path)
     return ParsedDocument(document=document, articles=articles)

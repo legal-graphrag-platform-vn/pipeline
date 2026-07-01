@@ -62,3 +62,41 @@ def test_clause_content_not_empty() -> None:
 def test_does_not_crash_on_empty_text() -> None:
     parsed = parse_text("", _doc_info())
     assert parsed.articles == []
+
+
+def test_parse_pdf_uses_ocr_explicitly() -> None:
+    from unittest.mock import patch
+    from src.parser.hierarchy_parser import parse_pdf, LineRecord
+
+    doc_info = _doc_info()
+    with patch("src.parser.hierarchy_parser.extract_lines_via_ocr") as mock_ocr, \
+         patch("src.parser.hierarchy_parser.extract_lines_with_font") as mock_font:
+        
+        mock_ocr.return_value = [LineRecord(text="Điều 1. Phạm vi")]
+        mock_font.return_value = []
+        
+        parsed = parse_pdf("dummy.pdf", doc_info, use_ocr=True)
+        
+        mock_ocr.assert_called_once_with("dummy.pdf")
+        mock_font.assert_not_called()
+        assert len(parsed.articles) == 1
+        assert parsed.articles[0].number == 1
+
+
+def test_parse_pdf_forces_no_ocr() -> None:
+    from unittest.mock import patch
+    from src.parser.hierarchy_parser import parse_pdf, LineRecord
+
+    doc_info = _doc_info()
+    with patch("src.parser.hierarchy_parser.extract_lines_via_ocr") as mock_ocr, \
+         patch("src.parser.hierarchy_parser.extract_lines_with_font") as mock_font:
+        
+        mock_font.return_value = [LineRecord(text="Điều 1. Phạm vi")]
+        
+        parsed = parse_pdf("dummy.pdf", doc_info, use_ocr=False)
+        
+        mock_font.assert_called_once_with("dummy.pdf")
+        mock_ocr.assert_not_called()
+        assert len(parsed.articles) == 1
+        assert parsed.articles[0].number == 1
+

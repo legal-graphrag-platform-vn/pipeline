@@ -6,7 +6,9 @@
 
 - **Bước 2: Phân tích cấu trúc luật (Parse)**
   - Từ dữ liệu đã cào: `python main.py parse --doc-id <doc_id>`
-  - Từ file PDF: `python main.py parse --doc-id <doc_id> --pdf <path> [--backend pypdf|auto]`
+  - Từ file PDF: `python main.py parse --doc-id <doc_id> --pdf <path> [--backend pypdf|auto] [--ocr|--no-ocr]`
+    - `--no-ocr` (Mặc định): Trích xuất trực tiếp từ text layer gốc (dành cho file PDF sạch convert từ Word/HTML).
+    - `--ocr`: Ép buộc chạy OCR Tesseract (dành cho file PDF dạng ảnh scan/không có text layer, yêu cầu máy đã cài Tesseract OCR).
   - Từ file text (.txt): `python main.py parse --doc-id <doc_id> --txt <path> --number "<so_hieu>" --title "<tieu_de>"`
   - Cấu trúc lưu tại: `data/processed/<doc_id>/hierarchy.json`
 
