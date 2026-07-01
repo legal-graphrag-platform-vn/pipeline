@@ -19,8 +19,12 @@ Trích xuất tất cả entities được đề cập:
 2. Concepts pháp lý (khái niệm, thuật ngữ chuyên ngành)
 3. Entities (loại hình doanh nghiệp, cơ quan, chủ thể)
 
-Mỗi entity có id duy nhất dạng snake_case, type thuộc \
-{{Document, Article, Clause, Point, Concept, Entity}}, label là tên hiển thị.
+QUY TẮC ĐẶT ID (BẮT BUỘC):
+- Đối với chính Điều đang xử lý: "dieu_<số điều>" (Ví dụ: Điều 17 là "dieu_17").
+- Đối với Khoản thuộc Điều này: "khoan_<số điều>_<số khoản>" (Ví dụ: Khoản 1 Điều 17 là "khoan_17_1").
+- Đối với Điểm thuộc Điều này: "diem_<số điều>_<số khoản>_<chữ cái điểm>" (Ví dụ: Điểm a Khoản 1 Điều 17 là "diem_17_1_a").
+- Đối với Concept/Entity/Document khác: Đặt tên tiếng Việt không dấu, viết thường, cách nhau bằng gạch dưới (Ví dụ: "cong_ty_co_phan", "co_quan_dang_ky_kinh_doanh").
+
 Chỉ trích xuất entity thực sự được nhắc tới trong văn bản, không suy diễn thêm."""
 
 RELATION_EXTRACTION_PROMPT = """Cho điều luật sau và danh sách entities đã xác định:
@@ -29,16 +33,14 @@ Article: {article_text}
 Entities: {entities_json}
 ---
 
-Xác định các quan hệ giữa entities.
-Chỉ sử dụng các relation types sau:
-- AMENDED_BY: A bị sửa đổi bởi B
-- REPLACED_BY: A bị thay thế bởi B
-- REFERENCES: A viện dẫn B
-- DEFINES: Article/Clause định nghĩa Concept
-- REGULATES: Article/Clause điều chỉnh Entity
-- REQUIRES: Entity yêu cầu/phải có Concept
-- IMPLEMENTED_BY: Law được hướng dẫn bởi Decree/Circular
+Xác định các quan hệ giữa entities. Chỉ sử dụng các loại quan hệ và tuân thủ chặt chẽ ràng buộc sau:
+- CONTAINS: Article -> Clause, hoặc Clause -> Point (Chỉ dùng cho cấu trúc phân cấp nội bộ).
+- DEFINES: Đi từ Article/Clause -> Concept.
+- REGULATES: Đi từ Article/Clause -> Entity hoặc Concept.
+- REQUIRES: Đi từ Entity -> Concept, hoặc Entity -> Entity.
+- REFERENCES: Đi từ Article/Clause/Point -> Article/Clause/Point/Document khác.
+- AMENDED_BY / REPLACED_BY / REPEALED_BY: Đi từ Document/Article/Clause -> Document/Article/Clause tương ứng.
+- IMPLEMENTED_BY: Đi từ Law -> Decree/Circular (Văn bản cấp cao hơn được hướng dẫn bởi cấp thấp hơn).
 
-Với mỗi relation, bắt buộc có "evidence" là câu văn nguyên gốc làm cơ sở, và
-"confidence" thể hiện mức tự tin của bạn vào quan hệ đó (0.0-1.0).
+Với mỗi relation, bắt buộc có "evidence" là câu văn nguyên gốc làm cơ sở, và "confidence" thể hiện mức tự tin của bạn (0.0-1.0).
 Chỉ trả về quan hệ có evidence rõ ràng trong văn bản, không suy diễn."""

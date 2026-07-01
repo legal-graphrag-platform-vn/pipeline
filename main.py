@@ -172,7 +172,7 @@ def extract(doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'"
     run_pipeline(parsed, settings.data_processed_dir)
     typer.echo(
         f"Extraction xong cho {doc_id}: xem data/processed/{doc_id}/"
-        "{accepted,review_queue,rejected}.jsonl"
+        "{extract.jsonl, prettier_extract.json}"
     )
 
 

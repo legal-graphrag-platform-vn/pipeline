@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     data_raw_dir: Path = Field(default=Path("data/raw"))
     data_processed_dir: Path = Field(default=Path("data/processed"))
+    extraction_max_workers: int = Field(default=10, ge=1, le=50, description="Số lượng luồng gọi LLM API song song")
 
     confidence_threshold_auto: float = Field(default=0.7, ge=0.0, le=1.0)
     confidence_threshold_review: float = Field(default=0.3, ge=0.0, le=1.0)

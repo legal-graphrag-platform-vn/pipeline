@@ -37,9 +37,7 @@ def _entity_type_lookup(entities: list[ExtractedEntity]) -> dict[str, str]:
 def process_article(
     article: Article,
     document: DocumentInfo,
-    accepted: AcceptedLog,
-    review: ReviewQueue,
-    rejected: RejectionLog,
+    all_records: list[dict],
 ) -> int:
     """Chạy Pass 1+2 extraction + validation + scoring cho 1 Article. Trả về số relations xử lý."""
     article_text = article.content_raw
@@ -91,23 +89,60 @@ def process_article(
             "ontology_error": ontology_err,
             "confidence": breakdown.total,
         }
-
-        if breakdown.total >= settings.confidence_threshold_auto:
-            accepted.append(record)
-        elif breakdown.total >= settings.confidence_threshold_review:
-            review.append(record)
-        else:
-            rejected.append(record)
+        all_records.append(record)
 
     return len(result.relations)
 
 
+def _process_article_worker(article: Article, document: DocumentInfo) -> list[dict]:
+    records = []
+    process_article(article, document, records)
+    return records
+
+
 def run_pipeline(parsed: ParsedDocument, processed_dir: Path) -> None:
     out_dir = processed_dir / parsed.document.id
-    accepted = AcceptedLog(out_dir / "accepted.jsonl")
-    review = ReviewQueue(out_dir / "review_queue.jsonl")
-    rejected = RejectionLog(out_dir / "rejected.jsonl")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    import json
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    all_records = []
+    max_workers = settings.extraction_max_workers
+    logger.info("Bắt đầu trích xuất tri thức song song với %d workers...", max_workers)
+
+    results_by_article = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_article = {
+            executor.submit(_process_article_worker, article, parsed.document): article
+            for article in parsed.articles
+        }
+
+        total = len(parsed.articles)
+        completed = 0
+        for future in as_completed(future_to_article):
+            article = future_to_article[future]
+            completed += 1
+            try:
+                records = future.result()
+                results_by_article[article.number] = records
+                logger.info("Đã trích xuất xong Điều %d / %d", article.number, total)
+            except Exception as e:
+                logger.error("Lỗi khi trích xuất Điều %d: %s", article.number, e)
+
+    # Đảm bảo giữ đúng thứ tự các Điều trong văn bản gốc
     for article in parsed.articles:
-        logger.info("Processing Điều %d / %d", article.number, len(parsed.articles))
-        process_article(article, parsed.document, accepted, review, rejected)
+        if article.number in results_by_article:
+            all_records.extend(results_by_article[article.number])
+
+    # 1. Ghi tất cả ra file extract.jsonl (mỗi dòng 1 bản ghi JSON)
+    extract_jsonl_path = out_dir / "extract.jsonl"
+    with extract_jsonl_path.open("w", encoding="utf-8") as f:
+        for record in all_records:
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+    # 2. Ghi ra file prettier_extract.json (định dạng đẹp, dễ đọc)
+    prettier_json_path = out_dir / "prettier_extract.json"
+    with prettier_json_path.open("w", encoding="utf-8") as f:
+        json.dump(all_records, f, ensure_ascii=False, indent=2, default=str)
+
