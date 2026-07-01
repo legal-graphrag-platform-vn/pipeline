@@ -7,22 +7,31 @@ edge case thực tế trên văn bản thật (ghi log vào REPORT.md mục A).
 
 import re
 
-ARTICLE_RE = re.compile(r"^Điều\s+(\d+)\.\s*(.*)$")
-# Chỉ dùng cho dòng từ OCR (Tesseract đôi khi chèn 1-2 ký tự rác trước "Điều", vd "'Điều 7.").
-# KHÔNG dùng cho PDF có text layer thật: văn bản sửa đổi/bổ sung hay trích dẫn nguyên văn
-# "Điều X." trong dấu ngoặc kép (vd '"Điều 25. ..."' lồng trong khoản của Điều 1) — nếu nới
-# lỏng sẽ nhận nhầm trích dẫn lồng nhau thành Điều cấp cao mới, làm gãy cấu trúc.
+
+# Pattern nhận diện dòng bắt đầu một Điều luật có chứa tối đa 2 ký tự nhiễu ở đầu (dành cho OCR).
 ARTICLE_RE_LENIENT = re.compile(r"^[^\wĐ]{0,2}Điều\s+(\d+)\.\s*(.*)$")
+
+#===================================================================================================
+
+# Pattern nhận diện dòng bắt đầu một Điều luật chính xác (không chứa ký tự nhiễu).
+ARTICLE_RE = re.compile(r"^Điều\s+(\d+)\.\s*(.*)$")
+
+# Pattern nhận diện dòng bắt đầu một Khoản luật (ví dụ: "1. ", "2. ").
 CLAUSE_RE = re.compile(r"^(\d+)\.\s+(.*)$")
+
+# Pattern nhận diện dòng bắt đầu một Điểm luật (ví dụ: "a) ", "b) ").
 POINT_RE = re.compile(r"^([a-zđ])\)\s+(.*)$")
+
+# Pattern nhận diện dòng tiêu đề Chương dạng số La Mã (ví dụ: "Chương II").
 CHAPTER_RE = re.compile(r"^Chương\s+([IVXLCDM]+)\s*$", re.IGNORECASE)
 
-# Dòng toàn chữ hoa (có dấu tiếng Việt) — heuristic cho tiêu đề chương, theo sau dòng "Chương X"
+# Pattern nhận diện dòng in hoa toàn bộ có dấu tiếng Việt (dùng làm heuristic cho tên Chương).
 UPPERCASE_TITLE_RE = re.compile(
     r"^[A-ZĐÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ0-9 ,.\-]+$"
 )
 
 
+# Thực hiện khớp và bóc tách thông tin Điều luật (số thứ tự và nội dung).
 def match_article(line: str, lenient: bool = False) -> tuple[int, str] | None:
     pattern = ARTICLE_RE_LENIENT if lenient else ARTICLE_RE
     m = pattern.match(line.strip())
@@ -31,6 +40,7 @@ def match_article(line: str, lenient: bool = False) -> tuple[int, str] | None:
     return int(m.group(1)), m.group(2).strip()
 
 
+# Thực hiện khớp và bóc tách thông tin Khoản luật (số thứ tự và nội dung).
 def match_clause(line: str) -> tuple[int, str] | None:
     m = CLAUSE_RE.match(line.strip())
     if not m:
@@ -38,6 +48,7 @@ def match_clause(line: str) -> tuple[int, str] | None:
     return int(m.group(1)), m.group(2).strip()
 
 
+# Thực hiện khớp và bóc tách thông tin Điểm luật (ký hiệu chữ cái và nội dung).
 def match_point(line: str) -> tuple[str, str] | None:
     m = POINT_RE.match(line.strip())
     if not m:
@@ -45,6 +56,7 @@ def match_point(line: str) -> tuple[str, str] | None:
     return m.group(1), m.group(2).strip()
 
 
+# Thực hiện khớp và bóc tách thông tin Chương (số thứ tự La Mã).
 def match_chapter(line: str) -> str | None:
     m = CHAPTER_RE.match(line.strip())
     if not m:
@@ -52,6 +64,7 @@ def match_chapter(line: str) -> str | None:
     return m.group(1)
 
 
+# Kiểm tra dòng văn bản có thỏa mãn điều kiện là tiêu đề Chương hay không.
 def looks_like_title(line: str) -> bool:
     """Heuristic: dòng toàn chữ hoa, đủ ngắn để là tiêu đề chứ không phải đoạn văn."""
     stripped = line.strip()
