@@ -1,18 +1,4 @@
-"""Crawler cho vbpl.vn — lấy nội dung văn bản pháp luật + metadata trực tiếp từ trang web.
 
-QUYẾT ĐỊNH THIẾT KẾ (lệch so với plan ban đầu — xem REPORT.md mục B để biết lý do đầy đủ):
-
-vbpl.vn là Next.js SPA (client/RSC-rendered), không phải ASP.NET WebForms
-server-rendered như giả định lúc lập kế hoạch -> cần Playwright (headless Chromium)
-để chờ JS render xong, thay vì httpx + BeautifulSoup thuần.
-
-Nút "Tải về" (PDF) bị chặn sau Google reCAPTCHA vô hình; không có endpoint PDF lộ
-ra qua network mà không giải captcha — không tự động hoá việc bypass captcha.
-Toàn bộ nội dung văn bản pháp luật đầy đủ đã sẵn dạng text trong DOM ở tab
-"Nội dung" (tab mặc định khi load trang) -> crawler trích text trực tiếp từ
-trang đã render, lưu .txt thay vì .pdf. `parser.hierarchy_parser.parse_text()`
-đã hỗ trợ input text thuần nên Parser không cần đổi gì để dùng output này.
-"""
 
 from __future__ import annotations
 
@@ -113,7 +99,66 @@ def _extract_body_lines(full_text: str) -> list[str]:
     if last_tai_ve == -1:
         logger.warning("Không tìm thấy marker 'Tải về' trên trang — dùng toàn bộ text làm nội dung.")
         return lines
-    return lines[last_tai_ve + 1 :]
+    
+    body_lines = lines[last_tai_ve + 1 :]
+    
+    # 1.    Tìm vị trí bắt đầu thực sự của Luật (Chương đầu tiên, Phần đầu tiên, hoặc Điều 1).
+    start_index = -1
+    start_pattern = re.compile(
+        r"^(Chương\s+[IVXLCDM\d]+|Phần\s+(\d+|[IVXLCDM]+|thứ\s+\w+)|Điều\s+1\b)",
+        re.IGNORECASE
+    )
+    for i, line in enumerate(body_lines):
+        if start_pattern.match(line.strip()):
+            start_index = i
+            break
+            
+    if start_index != -1:
+        body_lines = body_lines[start_index:]
+        
+    # 2.    Tìm vị trí bắt đầu của Điều luật cuối cùng để làm mốc an toàn.
+    search_start_index = 0
+    for i in range(len(body_lines) - 1, -1, -1):
+        if re.match(r"^Điều\s+\d+\.", body_lines[i].strip()):
+            search_start_index = i
+            break
+            
+    # 3.    Nếu không tìm thấy Điều nào, mặc định tìm ở nửa sau văn bản.
+    if search_start_index == 0:
+        search_start_index = len(body_lines) // 2
+        
+    # 4.    Danh sách các marker chữ ký đặc trưng ở cuối văn bản luật.
+    _SIGNATURE_MARKERS = {
+        "CHỦ TỊCH QUỐC HỘI",
+        "THỦ TƯỚNG CHÍNH PHỦ",
+        "KT. THỦ TƯỚNG",
+        "KÝ THAY",
+        "KT. BỘ TRƯỞNG",
+        "QUYỀN CHỦ TỊCH",
+        "(Đã ký)",
+        "(đã ký)",
+    }
+    
+    truncate_index = -1
+    for i in range(search_start_index, len(body_lines)):
+        line_clean = body_lines[i].strip()
+        is_redundant = (
+            line_clean == "CƠ SỞ DỮ LIỆU QUỐC GIA VỀ PHÁP LUẬT"
+            or line_clean == "Mục lục"
+            or line_clean in _SIGNATURE_MARKERS
+            or line_clean.startswith("Luật này được Quốc hội")
+            or line_clean.startswith("Luật này đã được Quốc hội")
+            or line_clean.startswith("Nghị định này được")
+            or any(line_clean.startswith(m) for m in ["KT. THỦ TƯỚNG", "KT. BỘ TRƯỞNG", "KÝ THAY"])
+        )
+        if is_redundant:
+            truncate_index = i
+            break
+            
+    if truncate_index != -1:
+        body_lines = body_lines[:truncate_index]
+        
+    return body_lines
 
 
 def fetch_document(url: str, doc_id: str, number: str, timeout_ms: int = 30000) -> tuple[str, DocumentMetadata]:

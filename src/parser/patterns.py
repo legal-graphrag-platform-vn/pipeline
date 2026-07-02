@@ -9,7 +9,7 @@ import re
 
 
 # Pattern nhận diện dòng bắt đầu một Điều luật có chứa tối đa 2 ký tự nhiễu ở đầu (dành cho OCR).
-ARTICLE_RE_LENIENT = re.compile(r"^[^\wĐ]{0,2}Điều\s+(\d+)\.\s*(.*)$")
+ARTICLE_RE_LENIENT = re.compile(r"^[^\wĐ]{0,2}Điều\s+(\d+)(?:\.|\s*$)\s*(.*)$")
 
 #===================================================================================================
 
@@ -19,7 +19,7 @@ UPPERCASE_TITLE_RE = re.compile(
 )
 
 # Pattern nhận diện dòng bắt đầu một Điều luật chính xác (không chứa ký tự nhiễu).
-ARTICLE_RE = re.compile(r"^Điều\s+(\d+)\.\s*(.*)$")
+ARTICLE_RE = re.compile(r"^Điều\s+(\d+)(?:\.|\s*$)\s*(.*)$")
 
 # Pattern nhận diện dòng bắt đầu một Khoản luật (ví dụ: "1. ", "2. ").
 CLAUSE_RE = re.compile(r"^(\d+)\.\s*(.*)$")
