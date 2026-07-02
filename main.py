@@ -24,7 +24,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 from src.config import settings
 from src.crawler.vbpl_crawler import crawl_and_save
-from src.parser.hierarchy_parser import parse_pdf, parse_text
+from src.parser.hierarchy_parser import parse_text
 from src.parser.models import DocumentInfo, ParsedDocument
 from src.pipeline.orchestrator import run_pipeline
 
@@ -56,40 +56,24 @@ def crawl(
     typer.echo(f"Đã crawl {doc_id}: {metadata.title} ({metadata.status})")
 
 
-# Lệnh CLI để phân tách cấu trúc văn bản pháp luật (Chương/Điều/Khoản/Điểm) từ file thô, PDF hoặc Text.
+# Lệnh CLI để phân tách cấu trúc văn bản pháp luật (Chương/Điều/Khoản/Điểm) từ file thô hoặc Text.
 @app.command()
 def parse(
     doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")],
-    pdf: Annotated[
-        Path | None,
-        typer.Option(help="Parse trực tiếp từ file PDF (vd PDF gốc tải tay) thay vì source.txt cào được."),
-    ] = None,
     txt: Annotated[
         Path | None,
         typer.Option(help="Parse trực tiếp từ file text (.txt) tự chọn."),
     ] = None,
     number: Annotated[
-        str | None, typer.Option(help="Số hiệu văn bản (chỉ cần khi dùng --pdf hoặc --txt mà chưa có metadata.json)")
+        str | None, typer.Option(help="Số hiệu văn bản (chỉ cần khi dùng --txt mà chưa có metadata.json)")
     ] = None,
     title: Annotated[
-        str | None, typer.Option(help="Tiêu đề văn bản (chỉ cần khi dùng --pdf hoặc --txt mà chưa có metadata.json)")
+        str | None, typer.Option(help="Tiêu đề văn bản (chỉ cần khi dùng --txt mà chưa có metadata.json)")
     ] = None,
-    backend: Annotated[
-        str,
-        typer.Option(help="Backend trích PDF: 'auto' (PyMuPDF, tự OCR nếu cần) hoặc 'pypdf' (text layer thật)."),
-    ] = "auto",
-    ocr: Annotated[
-        bool,
-        typer.Option(
-            "--ocr/--no-ocr",
-            help="Sử dụng OCR (Tesseract) đối với bản PDF scan (True), hoặc trích xuất từ text layer gốc (False).",
-        ),
-    ] = False,
 ) -> None:
     """Parse văn bản -> data/processed/<doc_id>/hierarchy.json.
 
     Mặc định đọc data/raw/<doc_id>/source.txt (output của `crawl`, lấy từ HTML body).
-    Dùng `--pdf <path>` để parse trực tiếp từ file PDF.
     Dùng `--txt <path>` để parse trực tiếp từ file text (.txt).
     """
     raw_dir = _raw_dir(doc_id)
@@ -113,7 +97,7 @@ def parse(
         else:
             if not number:
                 typer.echo(
-                    "Không có metadata.json — cần truyền --number (và tuỳ chọn --title) khi dùng --pdf hoặc --txt.",
+                    "Không có metadata.json — cần truyền --number (và tuỳ chọn --title) khi dùng --txt.",
                     err=True,
                 )
                 raise typer.Exit(code=1)
@@ -125,10 +109,7 @@ def parse(
                 status="active",
             )
 
-    if pdf is not None:
-        doc_info = get_doc_info()
-        parsed = parse_pdf(str(pdf), doc_info, backend=backend, use_ocr=ocr)
-    elif txt is not None:
+    if txt is not None:
         if not txt.exists():
             typer.echo(f"File text không tồn tại: {txt}", err=True)
             raise typer.Exit(code=1)
@@ -138,7 +119,7 @@ def parse(
     else:
         source_path = raw_dir / "source.txt"
         if not source_path.exists() or not metadata_path.exists():
-            typer.echo(f"Thiếu {source_path} hoặc {metadata_path} — chạy `crawl` trước (hoặc dùng --pdf / --txt).", err=True)
+            typer.echo(f"Thiếu {source_path} hoặc {metadata_path} — chạy `crawl` trước (hoặc dùng --txt).", err=True)
             raise typer.Exit(code=1)
 
         text = source_path.read_text(encoding="utf-8")
