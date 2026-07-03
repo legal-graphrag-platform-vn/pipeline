@@ -44,6 +44,46 @@ def _processed_dir(doc_id: str) -> Path:
     return settings.data_processed_dir / doc_id
 
 
+def _parse_folder_worker(folder_name: str) -> bool:
+    """Worker xử lý parse cho 1 thư mục đơn lẻ."""
+    try:
+        raw_dir = settings.data_raw_dir / folder_name
+        metadata_path = raw_dir / "metadata.json"
+        source_path = raw_dir / "source.txt"
+
+        if not source_path.exists() or not metadata_path.exists():
+            typer.echo(f"Thư mục {folder_name} thiếu source.txt hoặc metadata.json", err=True)
+            return False
+
+        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+        doc_info = DocumentInfo(
+            id=meta["doc_id"],
+            title=meta["title"],
+            number=meta["number"],
+            doc_type=meta["doc_type"],
+            issued_by=meta.get("issued_by"),
+            issued_date=meta.get("issued_date"),
+            effective_from=meta.get("effective_from"),
+            effective_to=meta.get("effective_to"),
+            status=meta.get("status", "active"),
+        )
+
+        text = source_path.read_text(encoding="utf-8")
+        parsed = parse_text(text, doc_info)
+
+        out_dir = settings.data_processed_dir / folder_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # Ghi đè file hierarchy.json nếu đã tồn tại
+        (out_dir / "hierarchy.json").write_text(
+            parsed.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
+        )
+        typer.echo(f"Parsed thành công {folder_name} -> {out_dir / 'hierarchy.json'}")
+        return True
+    except Exception as e:
+        typer.echo(f"Lỗi khi parse thư mục {folder_name}: {e}", err=True)
+        return False
+
+
 # Lệnh CLI để cào thông tin chi tiết và nội dung văn bản pháp luật từ trang vbpl.vn.
 @app.command()
 def crawl(
@@ -70,7 +110,10 @@ def crawl_search(
 # Lệnh CLI để phân tách cấu trúc văn bản pháp luật (Chương/Điều/Khoản/Điểm) từ file thô hoặc Text.
 @app.command()
 def parse(
-    doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")],
+    doc_id: Annotated[
+        str | None,
+        typer.Option(help="Document ID, vd 'LDN2020'. Nếu không truyền, mặc định parse toàn bộ thư mục trong data/raw/"),
+    ] = None,
     txt: Annotated[
         Path | None,
         typer.Option(help="Parse trực tiếp từ file text (.txt) tự chọn."),
@@ -86,15 +129,21 @@ def parse(
 
     Mặc định đọc data/raw/<doc_id>/source.txt (output của `crawl`, lấy từ HTML body).
     Dùng `--txt <path>` để parse trực tiếp từ file text (.txt).
+    Nếu không truyền --doc-id và không dùng --txt, sẽ parse tất cả thư mục trong data/raw.
     """
-    raw_dir = _raw_dir(doc_id)
-    metadata_path = raw_dir / "metadata.json"
+    # 1.   Nếu dùng --txt để parse trực tiếp từ file text tự chọn
+    if txt is not None:
+        if not txt.exists():
+            typer.echo(f"File text không tồn tại: {txt}", err=True)
+            raise typer.Exit(code=1)
+        if not doc_id:
+            typer.echo("Khi dùng --txt, bắt buộc phải truyền --doc-id để xác định định danh văn bản.", err=True)
+            raise typer.Exit(code=1)
 
-    # Đọc thông tin metadata của văn bản từ file json hoặc khởi tạo thông tin mặc định.
-    def get_doc_info() -> DocumentInfo:
+        metadata_path = settings.data_raw_dir / doc_id / "metadata.json"
         if metadata_path.exists():
             meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-            return DocumentInfo(
+            doc_info = DocumentInfo(
                 id=meta["doc_id"],
                 title=meta["title"],
                 number=meta["number"],
@@ -112,7 +161,7 @@ def parse(
                     err=True,
                 )
                 raise typer.Exit(code=1)
-            return DocumentInfo(
+            doc_info = DocumentInfo(
                 id=doc_id,
                 title=title or doc_id,
                 number=number,
@@ -120,29 +169,83 @@ def parse(
                 status="active",
             )
 
-    if txt is not None:
-        if not txt.exists():
-            typer.echo(f"File text không tồn tại: {txt}", err=True)
-            raise typer.Exit(code=1)
-        doc_info = get_doc_info()
         text = txt.read_text(encoding="utf-8")
         parsed = parse_text(text, doc_info)
-    else:
+        out_dir = settings.data_processed_dir / doc_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "hierarchy.json").write_text(
+            parsed.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
+        )
+        typer.echo(f"Parsed {doc_id}: {len(parsed.articles)} Điều -> {out_dir / 'hierarchy.json'}")
+        return
+
+    # 2.   Nếu không dùng --txt và truyền --doc-id cụ thể để parse một thư mục
+    if doc_id is not None:
+        raw_dir = _raw_dir(doc_id)
+        metadata_path = raw_dir / "metadata.json"
         source_path = raw_dir / "source.txt"
+
         if not source_path.exists() or not metadata_path.exists():
             typer.echo(f"Thiếu {source_path} hoặc {metadata_path} — chạy `crawl` trước (hoặc dùng --txt).", err=True)
             raise typer.Exit(code=1)
 
-        text = source_path.read_text(encoding="utf-8")
-        doc_info = get_doc_info()
-        parsed = parse_text(text, doc_info)
+        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+        doc_info = DocumentInfo(
+            id=meta["doc_id"],
+            title=meta["title"],
+            number=meta["number"],
+            doc_type=meta["doc_type"],
+            issued_by=meta.get("issued_by"),
+            issued_date=meta.get("issued_date"),
+            effective_from=meta.get("effective_from"),
+            effective_to=meta.get("effective_to"),
+            status=meta.get("status", "active"),
+        )
 
-    out_dir = _processed_dir(doc_id)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "hierarchy.json").write_text(
-        parsed.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
-    )
-    typer.echo(f"Parsed {doc_id}: {len(parsed.articles)} Điều -> {out_dir / 'hierarchy.json'}")
+        text = source_path.read_text(encoding="utf-8")
+        parsed = parse_text(text, doc_info)
+        out_dir = _processed_dir(doc_id)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "hierarchy.json").write_text(
+            parsed.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
+        )
+        typer.echo(f"Parsed {doc_id}: {len(parsed.articles)} Điều -> {out_dir / 'hierarchy.json'}")
+        return
+
+    # 3.   Nếu không truyền cả --txt và --doc-id, tự động quét và parse tất cả thư mục trong data/raw/
+    if not settings.data_raw_dir.exists():
+        typer.echo(f"Thư mục nguồn {settings.data_raw_dir} không tồn tại.", err=True)
+        raise typer.Exit(code=1)
+
+    subdirs = [p for p in settings.data_raw_dir.iterdir() if p.is_dir()]
+    valid_folders = [p.name for p in subdirs if (p / "source.txt").exists() and (p / "metadata.json").exists()]
+
+    if not valid_folders:
+        typer.echo("Không tìm thấy thư mục hợp lệ nào chứa cả source.txt và metadata.json trong data/raw/.", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Tìm thấy {len(valid_folders)} thư mục hợp lệ trong data/raw/. Bắt đầu parse song song...")
+    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    parsed_count = 0
+    max_workers = min(10, len(valid_folders))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_folder = {
+            executor.submit(_parse_folder_worker, folder_name): folder_name
+            for folder_name in valid_folders
+        }
+        
+        for future in as_completed(future_to_folder):
+            folder_name = future_to_folder[future]
+            try:
+                success = future.result()
+                if success:
+                    parsed_count += 1
+            except Exception as e:
+                typer.echo(f"Lỗi không xác định khi xử lý {folder_name}: {e}", err=True)
+
+    typer.echo(f"Hoàn thành parse hàng loạt: Đã parse {parsed_count}/{len(valid_folders)} thư mục.")
 
 
 # Lệnh CLI để trích xuất thực thể, quan hệ từ cấu trúc đã phân tách sử dụng mô hình LLM.
