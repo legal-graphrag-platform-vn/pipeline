@@ -200,3 +200,126 @@ def crawl_and_save(url: str, doc_id: str, number: str, raw_dir: Path) -> Documen
     )
     logger.info("Đã lưu %s vào %s", doc_id, out_dir)
     return metadata
+
+
+def crawl_by_search(
+    query: str,
+    raw_dir: Path,
+    limit: int = 10,
+    timeout_ms: int = 30000,
+) -> list[DocumentMetadata]:
+    """Crawl hàng loạt tài liệu từ kết quả tìm kiếm trên vbpl.vn."""
+    logger.info("Bắt đầu crawl hàng loạt dựa trên tìm kiếm với từ khóa: '%s', giới hạn: %d", query, limit)
+    
+    # 1.   Phần phân tích trích xuất doc_id và số hiệu từ tiêu đề
+    def infer_doc_id_and_number(title_text: str) -> tuple[str | None, str | None]:
+        num_match = re.search(r"(\d+(?:/\d+)?/[A-ZĐa-z0-9\-]+)", title_text)
+        if not num_match:
+            return None, None
+            
+        number = num_match.group(1)
+        parts = number.split("/")
+        num_part = parts[0]
+        year_part = parts[1] if len(parts) > 1 else "unknown"
+        
+        title_lower = title_text.lower()
+        if "luật" in title_lower:
+            prefix = "L"
+        elif "nghị định" in title_lower:
+            prefix = "ND"
+        elif "thông tư" in title_lower:
+            prefix = "TT"
+        elif "nghị quyết" in title_lower:
+            prefix = "NQ"
+        elif "quyết định" in title_lower:
+            prefix = "QD"
+        else:
+            prefix = "DOC"
+            
+        doc_id = f"{prefix}{num_part}_{year_part}"
+        return doc_id, number
+
+    results_metadata: list[DocumentMetadata] = []
+    links_to_crawl: list[tuple[str, str, str]] = []  # (url, doc_id, number)
+
+    # 2.   Khởi động Playwright để tìm kiếm các văn bản
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=_USER_AGENT,
+            viewport={"width": 1366, "height": 900},
+            locale="vi-VN",
+        )
+        page = context.new_page()
+        
+        url = "https://vbpl.vn/van-ban/trung-uong"
+        logger.info("Đang điều hướng đến trang tìm kiếm: %s", url)
+        page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+        page.wait_for_timeout(3000)
+        
+        # 3.   Điền từ khóa và chọn tùy chọn tìm kiếm tiêu đề chính xác
+        page.fill("input#keyword", query)
+        page.wait_for_timeout(500)
+        page.click("input[type='radio'][value='title']")
+        page.wait_for_timeout(500)
+        page.click("label:has-text('Chính xác cụm từ trên')")
+        page.wait_for_timeout(500)
+        
+        # 4.   Nhấn tìm kiếm và chờ kết quả
+        page.click("button:has-text('Tìm kiếm')")
+        logger.info("Chờ tải kết quả tìm kiếm...")
+        page.wait_for_selector("div[class*='DocumentCard_documentTitle__']", timeout=timeout_ms)
+        page.wait_for_timeout(2000)
+        
+        # 5.   Lặp qua các trang để thu thập đủ số lượng URL mong muốn
+        while len(links_to_crawl) < limit:
+            title_locators = page.locator("div[class*='DocumentCard_documentTitle__']").all()
+            if not title_locators:
+                break
+                
+            for title_el in title_locators:
+                if len(links_to_crawl) >= limit:
+                    break
+                    
+                title_text = title_el.inner_text().strip()
+                doc_id, number = infer_doc_id_and_number(title_text)
+                
+                if not doc_id or not number:
+                    continue
+                    
+                with context.expect_page() as new_page_info:
+                    title_el.click()
+                new_page = new_page_info.value
+                new_page.wait_for_timeout(1000)
+                detail_url = new_page.url
+                new_page.close()
+                
+                links_to_crawl.append((detail_url, doc_id, number))
+                logger.info("Đã thu thập URL: %s | ID: %s", detail_url, doc_id)
+                
+            if len(links_to_crawl) >= limit:
+                break
+                
+            # 6.   Chuyển sang trang kết quả tiếp theo nếu chưa đạt giới hạn
+            next_btn = page.locator("button:has-text('Sau')")
+            if next_btn.is_visible() and next_btn.is_enabled():
+                logger.info("Đang chuyển sang trang kết quả tiếp theo...")
+                next_btn.click()
+                page.wait_for_timeout(3000)
+                page.wait_for_selector("div[class*='DocumentCard_documentTitle__']", timeout=timeout_ms)
+            else:
+                logger.info("Đã đến trang kết quả cuối cùng.")
+                break
+                
+        browser.close()
+
+    # 7.   Crawl và lưu nội dung từng tài liệu đã tìm thấy
+    for url_val, doc_id_val, number_val in links_to_crawl:
+        try:
+            metadata = crawl_and_save(url_val, doc_id_val, number_val, raw_dir)
+            results_metadata.append(metadata)
+        except Exception as e:
+            logger.error("Lỗi khi crawl tài liệu %s từ %s: %s", doc_id_val, url_val, e)
+            
+    return results_metadata
+

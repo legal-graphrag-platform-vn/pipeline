@@ -11,10 +11,10 @@ def get_provider() -> BaseProvider:
     provider_name = settings.llm_provider.lower()
     if provider_name == "gemini":
         return GeminiProvider()
-    elif provider_name in ("minimax", "qwen", "openai"):
+    elif provider_name in ("minimax", "qwen", "openai", "ollama"):
         return OpenAICompatibleProvider(provider_type=provider_name)
     else:
         raise ValueError(
             f"LLM Provider '{settings.llm_provider}' không được hỗ trợ. "
-            "Các giá trị hợp lệ: gemini, minimax, qwen, openai."
+            "Các giá trị hợp lệ: gemini, minimax, qwen, openai, ollama."
         )

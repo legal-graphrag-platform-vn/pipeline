@@ -65,6 +65,9 @@ class OpenAICompatibleProvider(BaseProvider):
         elif self.provider_type == "qwen":
             base_url = settings.qwen_base_url
             model = settings.qwen_model
+        elif self.provider_type == "ollama":
+            base_url = settings.ollama_base_url
+            model = settings.ollama_model
         else:  # openai hoặc provider chung
             base_url = settings.openai_base_url if settings.openai_base_url else None
             model = settings.openai_model

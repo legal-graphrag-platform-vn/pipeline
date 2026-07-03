@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="")
     openai_base_url: str = Field(default="")
 
+    # Ollama (Local)
+    ollama_model: str = Field(default="qwen3:8b")
+    ollama_base_url: str = Field(default="http://localhost:11434/v1")
+
     data_raw_dir: Path = Field(default=Path("data/raw"))
     data_processed_dir: Path = Field(default=Path("data/processed"))
     extraction_max_workers: int = Field(default=10, ge=1, le=50, description="Số lượng luồng gọi LLM API song song")
@@ -79,6 +83,8 @@ class Settings(BaseSettings):
             if not self.openai_api_key:
                 raise RuntimeError("Thiếu OPENAI_API_KEY trong file .env.")
             return self.openai_api_key
+        elif provider == "ollama":
+            return "ollama"  # Ollama không bắt buộc API key thực tế
         else:
             raise ValueError(f"LLM provider '{self.llm_provider}' không hợp lệ.")
 

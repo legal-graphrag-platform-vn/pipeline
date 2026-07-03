@@ -58,13 +58,25 @@ def process_article(
         head_level = DOCUMENT_LEVELS.get(document.doc_type) if head_type == "Document" else None
         tail_level = DOCUMENT_LEVELS.get(document.doc_type) if tail_type == "Document" else None
 
+        # 1.   Construct actual relationship properties from document metadata and context
+        relation_properties = {}
+        if document.effective_from:
+            relation_properties["effective_from"] = str(document.effective_from)
+        if raw_relation.relation == "AMENDED_BY":
+            relation_properties["source_doc_id"] = document.id
+        elif raw_relation.relation == "REQUIRES":
+            relation_properties["source_article"] = f"{document.id}_D{article.number}"
+
+        # 2.   Enrich the relation dictionary with actual properties
+        relation_dict["properties"] = relation_properties
+
         ontology_ok, ontology_err = validate_ontology(
             head_type,
             raw_relation.relation,
             tail_type,
             head_id=raw_relation.head,
             tail_id=raw_relation.tail,
-            properties={},
+            properties=relation_properties,
             head_doc_level=head_level,
             tail_doc_level=tail_level,
         )

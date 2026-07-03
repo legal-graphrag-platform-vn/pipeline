@@ -23,7 +23,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8")
 
 from src.config import settings
-from src.crawler.vbpl_crawler import crawl_and_save
+from src.crawler.vbpl_crawler import crawl_and_save, crawl_by_search
 from src.parser.hierarchy_parser import parse_text
 from src.parser.models import DocumentInfo, ParsedDocument
 from src.pipeline.orchestrator import run_pipeline
@@ -54,6 +54,17 @@ def crawl(
     """Crawl văn bản từ vbpl.vn -> data/raw/<doc_id>/{source.txt,metadata.json}."""
     metadata = crawl_and_save(url, doc_id=doc_id, number=number, raw_dir=settings.data_raw_dir)
     typer.echo(f"Đã crawl {doc_id}: {metadata.title} ({metadata.status})")
+
+
+# Lệnh CLI để cào hàng loạt văn bản pháp luật dựa trên từ khóa tìm kiếm trên vbpl.vn.
+@app.command()
+def crawl_search(
+    query: Annotated[str, typer.Option(help="Từ khóa tìm kiếm trên vbpl.vn (vd: 'Luật Doanh nghiệp số')")],
+    limit: Annotated[int, typer.Option(help="Số lượng văn bản tối đa muốn crawl")] = 10,
+) -> None:
+    """Crawl hàng loạt văn bản từ vbpl.vn dựa trên từ khóa tìm kiếm."""
+    results = crawl_by_search(query, raw_dir=settings.data_raw_dir, limit=limit)
+    typer.echo(f"Đã crawl thành công {len(results)} văn bản dựa trên tìm kiếm từ khóa '{query}'.")
 
 
 # Lệnh CLI để phân tách cấu trúc văn bản pháp luật (Chương/Điều/Khoản/Điểm) từ file thô hoặc Text.
@@ -139,8 +150,8 @@ def parse(
 def extract(doc_id: Annotated[str, typer.Option(help="Document ID, vd 'LDN2020'")]) -> None:
     """Chạy LLM Extraction + Validation + Scoring trên hierarchy.json đã parse."""
     try:
-        settings.require_gemini_api_key()
-    except RuntimeError as e:
+        settings.require_api_key()
+    except Exception as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=1) from e
 

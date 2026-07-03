@@ -28,6 +28,12 @@ def test_provider_factory() -> None:
         assert isinstance(provider, OpenAICompatibleProvider)
         assert provider.provider_type == "qwen"
 
+    # Test ollama provider
+    with patch.object(settings, "llm_provider", "ollama"):
+        provider = get_provider()
+        assert isinstance(provider, OpenAICompatibleProvider)
+        assert provider.provider_type == "ollama"
+
     # Test invalid provider
     with patch.object(settings, "llm_provider", "unknown"):
         with pytest.raises(ValueError, match="LLM Provider 'unknown' không được hỗ trợ"):
@@ -50,6 +56,23 @@ def test_openai_provider_minimax_config(mock_openai_class: MagicMock) -> None:
         client, model = provider._get_client_and_model()
         mock_openai_class.assert_called_once_with(api_key="test-key-minimax", base_url="https://api.test-minimax.chat")
         assert model == "test-model-minimax"
+
+
+@patch("src.extraction.providers.openai_provider.OpenAI")
+def test_openai_provider_ollama_config(mock_openai_class: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_openai_class.return_value = mock_client
+
+    with patch.object(settings, "llm_provider", "ollama"), \
+         patch.object(settings, "ollama_model", "qwen3:8b"), \
+         patch.object(settings, "ollama_base_url", "http://localhost:11434/v1"):
+         
+        provider = get_provider()
+        assert isinstance(provider, OpenAICompatibleProvider)
+        
+        client, model = provider._get_client_and_model()
+        mock_openai_class.assert_called_once_with(api_key="ollama", base_url="http://localhost:11434/v1")
+        assert model == "qwen3:8b"
 
 
 def test_clean_json_text() -> None:
