@@ -137,19 +137,29 @@ def _extract_body_lines(full_text: str) -> list[str]:
         "QUYỀN CHỦ TỊCH",
         "(Đã ký)",
         "(đã ký)",
+        "TM. CHÍNH PHỦ",
+        "TM. QUỐC HỘI",
+        "TM. ỦY BAN THƯỜNG VỤ QUỐC HỘI",
+        "THỦ TƯỚNG",
+        "BỘ TRƯỞNG",
+        "CHỦ TỊCH",
+        "NƠI NHẬN:",
+        "Nơi nhận:",
+        "Nơi nhận",
     }
     
     truncate_index = -1
     for i in range(search_start_index, len(body_lines)):
         line_clean = body_lines[i].strip()
+        line_clean_lower = line_clean.lower()
         is_redundant = (
             line_clean == "CƠ SỞ DỮ LIỆU QUỐC GIA VỀ PHÁP LUẬT"
-            or line_clean == "Mục lục"
+            or line_clean_lower == "mục lục"
             or line_clean in _SIGNATURE_MARKERS
-            or line_clean.startswith("Luật này được Quốc hội")
-            or line_clean.startswith("Luật này đã được Quốc hội")
-            or line_clean.startswith("Nghị định này được")
-            or any(line_clean.startswith(m) for m in ["KT. THỦ TƯỚNG", "KT. BỘ TRƯỞNG", "KÝ THAY"])
+            or line_clean_lower.startswith("luật này được quốc hội")
+            or line_clean_lower.startswith("luật này đã được quốc hội")
+            or line_clean_lower.startswith("nghị định này được")
+            or any(line_clean_lower.startswith(m) for m in ["kt.", "tm.", "ký thay", "ký thay.", "nơi nhận", "nơi nhận:"])
         )
         if is_redundant:
             truncate_index = i

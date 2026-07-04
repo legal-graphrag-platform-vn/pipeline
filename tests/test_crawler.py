@@ -69,14 +69,17 @@ def test_crawl_by_search_mocked(mock_crawl_and_save: MagicMock, mock_sync_playwr
     mock_title_locator = MagicMock()
     mock_title_locator.all.return_value = [mock_title_el]
     
-    mock_next_btn = MagicMock()
-    mock_next_btn.is_visible.return_value = False
+    mock_search_btn_locator = MagicMock()
+    mock_search_btn_nth = MagicMock()
+    mock_search_btn_locator.nth.return_value = mock_search_btn_nth
     
     def locator_side_effect(selector, **kwargs):
         if "DocumentCard_documentTitle__" in selector:
             return mock_title_locator
         elif "Sau" in selector:
             return mock_next_btn
+        elif "button:has-text('Tìm kiếm')" in selector:
+            return mock_search_btn_locator
         return MagicMock()
         
     mock_page.locator.side_effect = locator_side_effect
@@ -98,7 +101,9 @@ def test_crawl_by_search_mocked(mock_crawl_and_save: MagicMock, mock_sync_playwr
     mock_page.fill.assert_any_call("input#keyword", "Luật Doanh nghiệp")
     mock_page.click.assert_any_call("input[type='radio'][value='title']")
     mock_page.click.assert_any_call("label:has-text('Chính xác cụm từ trên')")
-    mock_page.click.assert_any_call("button:has-text('Tìm kiếm')")
+    mock_page.locator.assert_any_call("button:has-text('Tìm kiếm')")
+    mock_search_btn_locator.nth.assert_called_once_with(-1)
+    mock_search_btn_nth.click.assert_called_once_with(force=True)
     
     # 6.   Verify crawl_and_save was called with correct parameters
     mock_crawl_and_save.assert_called_once_with(
