@@ -257,8 +257,21 @@ def crawl_by_search(
         page.goto(url, wait_until="networkidle", timeout=timeout_ms)
         page.wait_for_timeout(3000)
         
-        # 3.   Điền từ khóa và chọn tùy chọn tìm kiếm tiêu đề chính xác
+        # 3.   Điền từ khóa và ẩn các gợi ý tìm kiếm tự động để tránh che khuất click
         page.fill("input#keyword", query)
+        page.wait_for_timeout(1000)
+        page.evaluate("""
+            () => {
+                const els = document.querySelectorAll('*');
+                els.forEach(el => {
+                    if (el.className && typeof el.className === 'string' && el.className.toLowerCase().includes('suggestion')) {
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                        el.style.pointerEvents = 'none';
+                    }
+                });
+            }
+        """)
         page.wait_for_timeout(500)
         page.click("input[type='radio'][value='title']")
         page.wait_for_timeout(500)
@@ -266,7 +279,8 @@ def crawl_by_search(
         page.wait_for_timeout(500)
         
         # 4.   Nhấn tìm kiếm và chờ kết quả
-        page.click("button:has-text('Tìm kiếm')")
+        search_btn = page.locator("button:has-text('Tìm kiếm')").nth(-1)
+        search_btn.click(force=True)
         logger.info("Chờ tải kết quả tìm kiếm...")
         page.wait_for_selector("div[class*='DocumentCard_documentTitle__']", timeout=timeout_ms)
         page.wait_for_timeout(2000)
