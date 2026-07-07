@@ -4,10 +4,10 @@
 Phạm vi M1+M2: dừng ở ghi accepted/review/rejected JSONL — KHÔNG ghi Neo4j, KHÔNG
 tạo embedding (Milestone 3, ngoài phạm vi task hiện tại).
 
-LƯU Ý GIỚI HẠN: `IMPLEMENTED_BY` cần `head_doc_level`/`tail_doc_level` của ĐÚNG
+LƯU Ý GIỚI HẠN: `GUIDES` cần `head_doc_type`/`tail_doc_type` của ĐÚNG
 văn bản được tham chiếu (vd Decree mà Article này dẫn tới), nhưng ở M1+M2 chưa có
-document registry (đó là việc của Neo4j/M3) nên orchestrator chỉ suy ra level khi
-entity type là chính document đang xử lý; còn lại level=None -> validator reject
+document registry (đó là việc của Neo4j/M3) nên orchestrator chỉ suy ra doc_type khi
+entity type là chính document đang xử lý; còn lại doc_type=None -> validator reject
 -> relation rơi vào review queue thay vì bị auto-accept sai. Đây là hành vi an
 toàn có chủ đích, không phải bug.
 """
@@ -23,7 +23,6 @@ from src.extraction.models import ExtractedEntity
 from src.parser.models import Article, DocumentInfo, ParsedDocument
 from src.pipeline.review_queue import AcceptedLog, RejectionLog, ReviewQueue
 from src.scoring.confidence_scorer import score
-from src.validation.ontology_validator import DOCUMENT_LEVELS
 from src.validation.ontology_validator import validate_relation as validate_ontology
 from src.validation.schema_validator import validate_relation as validate_schema
 
@@ -55,14 +54,14 @@ def process_article(
 
         head_type = entity_types.get(raw_relation.head, "Entity")
         tail_type = entity_types.get(raw_relation.tail, "Entity")
-        head_level = DOCUMENT_LEVELS.get(document.doc_type) if head_type == "Document" else None
-        tail_level = DOCUMENT_LEVELS.get(document.doc_type) if tail_type == "Document" else None
+        head_doc_type = document.doc_type if head_type == "Document" else None
+        tail_doc_type = document.doc_type if tail_type == "Document" else None
 
         # 1.   Construct actual relationship properties from document metadata and context
         relation_properties = {}
         if document.effective_from:
             relation_properties["effective_from"] = str(document.effective_from)
-        if raw_relation.relation == "AMENDED_BY":
+        if raw_relation.relation == "AMENDS":
             relation_properties["source_doc_id"] = document.id
         elif raw_relation.relation == "REQUIRES":
             relation_properties["source_article"] = f"{document.id}_D{article.number}"
@@ -77,8 +76,8 @@ def process_article(
             head_id=raw_relation.head,
             tail_id=raw_relation.tail,
             properties=relation_properties,
-            head_doc_level=head_level,
-            tail_doc_level=tail_level,
+            head_doc_type=head_doc_type,
+            tail_doc_type=tail_doc_type,
         )
 
         breakdown = score(
@@ -157,4 +156,3 @@ def run_pipeline(parsed: ParsedDocument, processed_dir: Path) -> None:
     prettier_json_path = out_dir / "prettier_extract.json"
     with prettier_json_path.open("w", encoding="utf-8") as f:
         json.dump(all_records, f, ensure_ascii=False, indent=2, default=str)
-

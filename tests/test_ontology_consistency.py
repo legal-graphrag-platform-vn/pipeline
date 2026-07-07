@@ -19,10 +19,10 @@ def test_no_orphan_constraints() -> None:
     assert orphans == set(), f"Constraints thừa (không có trong enum): {orphans}"
 
 
-def test_references_not_rejected() -> None:
-    """REFERENCES là relation phổ biến nhất — phải pass validator."""
-    ok, err = validate_relation("Article", "REFERENCES", "Article")
-    assert ok, f"REFERENCES bị reject: {err}"
+def test_refers_to_not_rejected() -> None:
+    """REFERS_TO là relation phổ biến nhất — phải pass validator."""
+    ok, err = validate_relation("Article", "REFERS_TO", "Article")
+    assert ok, f"REFERS_TO bị reject: {err}"
 
 
 def test_requires_not_rejected() -> None:
@@ -30,53 +30,53 @@ def test_requires_not_rejected() -> None:
     assert ok, f"REQUIRES bị reject: {err}"
 
 
-def test_replaced_by_same_type_enforced() -> None:
-    """REPLACED_BY chỉ hợp lệ khi head/tail cùng cấp (Document-Document, Article-Article)."""
+def test_replaces_document_only() -> None:
+    """REPLACES chỉ hợp lệ ở cấp Document theo ontology canonical."""
     ok, err = validate_relation(
-        "Article", "REPLACED_BY", "Document", properties={"effective_from": "2021-01-01"}
+        "Article", "REPLACES", "Article", properties={"effective_from": "2021-01-01"}
     )
     assert not ok
     ok, err = validate_relation(
-        "Article", "REPLACED_BY", "Article", properties={"effective_from": "2021-01-01"}
+        "Document", "REPLACES", "Document", properties={"effective_from": "2021-01-01"}
     )
-    assert ok, f"REPLACED_BY Article-Article bị reject sai: {err}"
+    assert ok, f"REPLACES Document-Document bị reject sai: {err}"
 
 
-def test_repealed_by_tail_always_document() -> None:
-    """REPEALED_BY: tail luôn phải là Document, bất kể head type nào."""
+def test_repeals_document_head() -> None:
+    """REPEALS đi từ Document sang Document/Article/Clause."""
     ok, err = validate_relation(
-        "Document", "REPEALED_BY", "Article", properties={"effective_from": "2021-01-01"}
+        "Article", "REPEALS", "Document", properties={"effective_from": "2021-01-01"}
     )
     assert not ok
     ok, err = validate_relation(
-        "Document", "REPEALED_BY", "Document", properties={"effective_from": "2021-01-01"}
+        "Document", "REPEALS", "Article", properties={"effective_from": "2021-01-01"}
     )
-    assert ok, f"REPEALED_BY Document-Document bị reject sai: {err}"
+    assert ok, f"REPEALS Document-Article bị reject sai: {err}"
 
 
-def test_amended_by_document_to_document_rejected() -> None:
-    """AMENDED_BY ở cấp Document đã bị bỏ — phải dùng REPLACED_BY/REPEALED_BY thay thế."""
+def test_amends_document_to_document_allowed() -> None:
+    """AMENDS là active voice và cho phép cấp Document khi văn bản sửa đổi văn bản khác."""
     ok, err = validate_relation(
-        "Document", "AMENDED_BY", "Document", properties={"effective_from": "2021-01-01"}
+        "Document", "AMENDS", "Document", properties={"effective_from": "2021-01-01"}
     )
-    assert not ok
+    assert ok, f"AMENDS Document-Document bị reject sai: {err}"
 
 
-def test_amended_by_missing_effective_from_rejected() -> None:
-    """AMENDED_BY bắt buộc required_properties=[effective_from]."""
-    ok, err = validate_relation("Article", "AMENDED_BY", "Clause", properties={})
+def test_amends_missing_effective_from_rejected() -> None:
+    """AMENDS bắt buộc required_properties=[effective_from]."""
+    ok, err = validate_relation("Article", "AMENDS", "Clause", properties={})
     assert not ok
     assert "effective_from" in (err or "")
 
 
-def test_implemented_by_level_rule() -> None:
-    """IMPLEMENTED_BY: head_doc_level phải lớn hơn tail_doc_level (Law > Decree > Circular)."""
+def test_guides_whitelist_rule() -> None:
+    """GUIDES dùng whitelist doc_type thay cho level property trong Neo4j."""
     ok, err = validate_relation(
-        "Document", "IMPLEMENTED_BY", "Document", head_doc_level=3, tail_doc_level=2
+        "Document", "GUIDES", "Document", head_doc_type="Law", tail_doc_type="Decree"
     )
     assert ok, f"Law->Decree bị reject sai: {err}"
     ok, err = validate_relation(
-        "Document", "IMPLEMENTED_BY", "Document", head_doc_level=1, tail_doc_level=3
+        "Document", "GUIDES", "Document", head_doc_type="Circular", tail_doc_type="Law"
     )
     assert not ok, "Circular->Law không hợp lệ nhưng validator lại pass"
 
@@ -84,7 +84,7 @@ def test_implemented_by_level_rule() -> None:
 def test_unknown_relation_rejected() -> None:
     ok, err = validate_relation("Article", "GUIDED_BY", "Document")
     assert not ok
-    assert "RELATION_ENUM" in (err or "")
+    assert "use canonical GUIDES" in (err or "")
 
 
 def test_contains_no_self_loop() -> None:

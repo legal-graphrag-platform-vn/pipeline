@@ -49,7 +49,7 @@ Hàm [process_article](file:///D:/Workspace/Project/legal-graphrag/pipline/src/p
 *   **Pass 2: Trích xuất mối quan hệ (Relation Extraction)**:
     *   Sử dụng [RELATION_EXTRACTION_PROMPT](file:///D:/Workspace/Project/legal-graphrag/pipline/src/extraction/prompts.py#L26).
     *   Đưa danh sách thực thể đã tìm thấy từ Pass 1 làm đầu vào cho Pass 2.
-    *   Yêu cầu LLM liên kết các thực thể bằng 9 loại quan hệ: `CONTAINS`, `AMENDED_BY`, `REPLACED_BY`, `REPEALED_BY`, `IMPLEMENTED_BY`, `REFERENCES`, `DEFINES`, `REGULATES`, `REQUIRES`.
+    *   Yêu cầu LLM liên kết các thực thể bằng relation vocabulary canonical: `CONTAINS`, `AMENDS`, `REPEALS`, `REPLACES`, `GUIDES`, `REFERS_TO`, `DEFINES`, `REGULATES`, `REQUIRES`.
     *   LLM bắt buộc phải cung cấp một chuỗi `evidence` trích xuất trực tiếp từ văn bản gốc làm căn cứ.
 
 **Hỗ trợ đa LLM Provider**:
@@ -66,8 +66,8 @@ Mỗi quan hệ sau khi trích xuất sẽ được đưa qua hai tầng lọc n
     *   Đảm bảo kiểu dữ liệu và định dạng khớp chuẩn xác với các mô hình Pydantic [ExtractedRelation](file:///D:/Workspace/Project/legal-graphrag/pipline/src/extraction/models.py#L42).
 2.  **Ontology Validation ([ontology_validator.py](file:///D:/Workspace/Project/legal-graphrag/pipline/src/validation/ontology_validator.py))**:
     *   Kiểm tra ràng buộc giữa cặp thực thể (`valid_pairs`): Ví dụ, quan hệ `CONTAINS` chỉ được đi từ `Article` $\rightarrow$ `Clause`, không được đi ngược lại hay nối giữa thực thể khác.
-    *   Ngăn chặn tự lặp (`no_self_loop`): Không cho phép thực thể tự liên kết với chính nó đối với các quan hệ như `CONTAINS`, `AMENDED_BY`, `REPLACED_BY`.
-    *   Quy tắc cấp bậc tài liệu (Document Level Rule) cho quan hệ `IMPLEMENTED_BY`: Luật cấp cao hơn chỉ có thể được hướng dẫn bởi Luật/Nghị định/Thông tư cấp thấp hơn (suy luận cấp độ từ cấu trúc [DOCUMENT_LEVELS](file:///D:/Workspace/Project/legal-graphrag/pipline/src/validation/ontology_validator.py#L16)).
+    *   Ngăn chặn tự lặp (`no_self_loop`): Không cho phép thực thể tự liên kết với chính nó đối với các quan hệ như `CONTAINS`, `AMENDS`, `REPLACES`.
+    *   Whitelist tài liệu cho quan hệ `GUIDES`: quan hệ hướng dẫn chỉ hợp lệ khi cặp `doc_type` nằm trong `GUIDES_WHITELIST`.
 
 ---
 
@@ -98,6 +98,6 @@ Kết quả trích xuất được định tuyến tự động vào các luồn
 ## 3. Các Case Biên và Giới Hạn Hiện Tại (Edge Cases & Limitations)
 
 *   **Thiếu Document Registry liên văn bản (M1+M2)**: 
-    *   Do M1+M2 hoạt động độc lập trên từng tài liệu và chưa tích hợp Database Đồ thị (Neo4j), mối quan hệ `IMPLEMENTED_BY` giữa tài liệu hiện tại với các văn bản khác sẽ chưa có dữ liệu kiểm chứng cấp độ (Document Level). Hệ thống sẽ gắn nhãn `tail_level=None` và đẩy các liên kết này vào `review_queue.jsonl` thay vì tự động chấp nhận sai. Đây là thiết kế an toàn có chủ đích.
+    *   Do M1+M2 hoạt động độc lập trên từng tài liệu và chưa tích hợp Database Đồ thị (Neo4j), mối quan hệ `GUIDES` giữa tài liệu hiện tại với các văn bản khác sẽ chưa có dữ liệu kiểm chứng `doc_type` đầy đủ. Hệ thống sẽ gắn nhãn `tail_doc_type=None` và đẩy các liên kết này vào `review_queue.jsonl` thay vì tự động chấp nhận sai. Đây là thiết kế an toàn có chủ đích.
 *   **Sai lệch định dạng ID thực thể (ID Normalization)**:
     *   LLM đôi khi sinh ra các ID chứa ký tự tiếng Việt có dấu, khoảng trắng hoặc ký tự đặc biệt làm gãy Schema. Hệ thống đã tích hợp bộ chuẩn hóa ID tự động chuyển đổi văn bản sang ký tự không dấu và dạng `snake_case` trước khi kiểm tra hợp lệ.

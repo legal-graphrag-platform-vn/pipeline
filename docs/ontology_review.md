@@ -1,6 +1,6 @@
-# Review Báo cáo & Phân tích khoảng cách: Legal Ontology (v1.1.0)
+# Historical Review: Legal Ontology Migration Notes (v1.1.0)
 
-Bản ontology mới (**v1.1.0 chốt ngày 2026-07-03**) định nghĩa lại một hợp đồng ràng buộc nghiêm ngặt giữa các thành phần của hệ thống. Dưới đây là phân tích chi tiết so với mã nguồn hiện tại của pipeline và các đề xuất điều chỉnh tương ứng.
+Bản ghi này là ghi chú lịch sử cho migration v1.1.0. Source of truth hiện hành là `plans/legal_ontology.md` v1.4.0.
 
 ---
 

@@ -1,14 +1,8 @@
-"""Ontology Validator — Step 4 của pipeline.
+"""Ontology Validator — Step 4 of the extraction pipeline.
 
-CONSTRAINTS copy nguyên từ plans/04_graph_construction_pipeline.md mục
-"Step 4: Ontology Validation". Đồng bộ bắt buộc với `tests/test_ontology_consistency.py`
-(invariant RELATION_ENUM == set(CONSTRAINTS.keys())).
-
-LƯU Ý: spec gốc có 2 chỗ liệt kê RELATION_ENUM khác nhau — bản ở Step 4 (9 relations,
-GUIDED_BY đã hợp nhất vào IMPLEMENTED_BY) và bản RELATION_ENUM_EXPECTED ở cuối file
-spec (10 relations, còn GUIDED_BY riêng, rõ ràng chưa cập nhật theo ghi chú "ADR
-session 2026-06-29"). Module này dùng bản 9-relation vì đó là bản có CONSTRAINTS đầy
-đủ và có ghi chú ADR rõ ràng hơn — xem REPORT.md mục B.
+This validator accepts the pre-writer extraction labels (`Entity`, `Concept`,
+`Action`) but enforces the canonical active-voice relation vocabulary from
+plans/legal_ontology.md v1.4.0.
 """
 
 from __future__ import annotations
@@ -21,13 +15,36 @@ DOCUMENT_LEVELS: dict[str, int] = {
     "Circular": 1,
 }
 
+GUIDES_WHITELIST: set[tuple[str, str]] = {
+    ("Constitution", "Law"),
+    ("Constitution", "Ordinance"),
+    ("Law", "Decree"),
+    ("Law", "Decision"),
+    ("Law", "Circular"),
+    ("Ordinance", "Decree"),
+    ("Resolution", "Decree"),
+    ("Decree", "Circular"),
+    ("Decree", "Decision"),
+    ("Decree", "JointCircular"),
+    ("Decision", "Circular"),
+}
+
+LEGACY_RELATION_ALIASES: dict[str, str] = {
+    "AMENDED_BY": "AMENDS",
+    "REPEALED_BY": "REPEALS",
+    "REPLACED_BY": "REPLACES",
+    "IMPLEMENTED_BY": "GUIDES",
+    "GUIDED_BY": "GUIDES",
+    "REFERENCES": "REFERS_TO",
+}
+
 RELATION_ENUM: set[str] = {
     "CONTAINS",
-    "AMENDED_BY",
-    "REPLACED_BY",
-    "REPEALED_BY",
-    "IMPLEMENTED_BY",
-    "REFERENCES",
+    "AMENDS",
+    "REPEALS",
+    "REPLACES",
+    "GUIDES",
+    "REFERS_TO",
     "DEFINES",
     "REGULATES",
     "REQUIRES",
@@ -42,43 +59,53 @@ CONSTRAINTS: dict[str, dict] = {
         ],
         "no_self_loop": True,
     },
-    "AMENDED_BY": {
-        # Document->Document đã bỏ: cấp Document dùng REPLACED_BY hoặc REPEALED_BY.
+    "AMENDS": {
         "valid_pairs": [
+            ("Document", "Document"),
+            ("Document", "Article"),
+            ("Document", "Clause"),
+            ("Article", "Document"),
             ("Article", "Article"),
             ("Article", "Clause"),
+            ("Clause", "Document"),
             ("Clause", "Clause"),
             ("Clause", "Article"),
         ],
         "no_self_loop": True,
         "required_properties": ["effective_from"],
     },
-    "REPLACED_BY": {
-        "head_tail_same_type": True,
+    "REPEALS": {
         "valid_pairs": [
             ("Document", "Document"),
-            ("Article", "Article"),
+            ("Document", "Article"),
+            ("Document", "Clause"),
         ],
         "no_self_loop": True,
         "required_properties": ["effective_from"],
     },
-    "REPEALED_BY": {
-        "allowed_tail": ["Document"],
-        "head_tail_same_type": False,
+    "REPLACES": {
+        "valid_pairs": [("Document", "Document")],
+        "no_self_loop": True,
         "required_properties": ["effective_from"],
     },
-    "IMPLEMENTED_BY": {
-        # Level-based rule: head.level > tail.level (xem DOCUMENT_LEVELS).
-        "rule": "head_doc_level > tail_doc_level",
+    "GUIDES": {
+        "valid_pairs": [("Document", "Document")],
+        "rule": "guides_whitelist",
     },
-    "REFERENCES": {
+    "REFERS_TO": {
         "valid_pairs": [
             ("Article", "Article"),
             ("Article", "Clause"),
+            ("Article", "Point"),
             ("Article", "Document"),
             ("Clause", "Article"),
             ("Clause", "Clause"),
+            ("Clause", "Point"),
             ("Clause", "Document"),
+            ("Point", "Article"),
+            ("Point", "Clause"),
+            ("Point", "Point"),
+            ("Point", "Document"),
         ],
     },
     "DEFINES": {
@@ -90,9 +117,9 @@ CONSTRAINTS: dict[str, dict] = {
     "REGULATES": {
         "valid_pairs": [
             ("Article", "Entity"),
-            ("Article", "Concept"),
+            ("Article", "Action"),
             ("Clause", "Entity"),
-            ("Clause", "Concept"),
+            ("Clause", "Action"),
         ],
     },
     "REQUIRES": {
@@ -114,23 +141,18 @@ def validate_relation(
     properties: dict | None = None,
     head_doc_level: int | None = None,
     tail_doc_level: int | None = None,
+    head_doc_type: str | None = None,
+    tail_doc_type: str | None = None,
 ) -> tuple[bool, str | None]:
     constraint = CONSTRAINTS.get(relation)
     if not constraint:
+        canonical = LEGACY_RELATION_ALIASES.get(relation)
+        if canonical:
+            return False, f"Legacy relation type {relation}; use canonical {canonical}"
         return False, (
             f"Unknown relation type: {relation}. "
             "Check RELATION_ENUM == set(CONSTRAINTS.keys())"
         )
-
-    if relation == "IMPLEMENTED_BY":
-        if head_doc_level is None or tail_doc_level is None:
-            return False, "IMPLEMENTED_BY yêu cầu head_doc_level và tail_doc_level"
-        if not head_doc_level > tail_doc_level:
-            return False, (
-                f"IMPLEMENTED_BY vi phạm rule head_doc_level > tail_doc_level "
-                f"({head_doc_level} <= {tail_doc_level})"
-            )
-        return True, None
 
     valid_pairs = constraint.get("valid_pairs")
     if valid_pairs and (head_type, tail_type) not in valid_pairs:
@@ -150,5 +172,15 @@ def validate_relation(
         missing = [p for p in required_props if not props.get(p)]
         if missing:
             return False, f"Missing required properties for {relation}: {missing}"
+
+    if relation == "GUIDES":
+        if head_doc_type is not None and tail_doc_type is not None:
+            if (head_doc_type, tail_doc_type) not in GUIDES_WHITELIST:
+                return False, f"GUIDES does not allow {head_doc_type} -> {tail_doc_type}"
+            return True, None
+        if head_doc_level is None or tail_doc_level is None:
+            return False, "GUIDES requires head_doc_type and tail_doc_type"
+        if not head_doc_level > tail_doc_level:
+            return False, f"GUIDES violates head_doc_level > tail_doc_level ({head_doc_level} <= {tail_doc_level})"
 
     return True, None

@@ -11,18 +11,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EntityType = Literal["Document", "Article", "Clause", "Point", "Concept", "Entity"]
+EntityType = Literal["Document", "Article", "Clause", "Point", "Concept", "Entity", "Action"]
 
-# 9 relation types đã chốt — GUIDED_BY đã hợp nhất vào IMPLEMENTED_BY (xem
-# plans/04_graph_construction_pipeline.md dòng 256, ghi đè bản RELATION_ENUM_EXPECTED
-# cũ ở cuối file vốn còn liệt kê GUIDED_BY do chưa cập nhật).
+# Canonical active-voice relation types from plans/legal_ontology.md v1.4.0.
 RelationType = Literal[
     "CONTAINS",
-    "AMENDED_BY",
-    "REPLACED_BY",
-    "REPEALED_BY",
-    "IMPLEMENTED_BY",
-    "REFERENCES",
+    "AMENDS",
+    "REPEALS",
+    "REPLACES",
+    "GUIDES",
+    "REFERS_TO",
     "DEFINES",
     "REGULATES",
     "REQUIRES",

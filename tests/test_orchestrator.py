@@ -33,9 +33,9 @@ def test_process_article_temporal_relations_properties() -> None:
     mock_relations = [
         ExtractedRelation(
             head="dieu_17",
-            relation="AMENDED_BY",
+            relation="AMENDS",
             tail="dieu_18",
-            evidence="Điều 17 được sửa đổi bởi Điều 18",
+            evidence="Điều 18 sửa đổi Điều 17",
             confidence=0.9,
         ),
         ExtractedRelation(
@@ -60,8 +60,8 @@ def test_process_article_temporal_relations_properties() -> None:
         # 4.   Verify that two relations were processed and logged correctly
         assert len(all_records) == 2
 
-        # 5.   Check AMENDED_BY relation properties and validation state
-        amended_record = next(r for r in all_records if r["relation"]["relation"] == "AMENDED_BY")
+        # 5.   Check AMENDS relation properties and validation state
+        amended_record = next(r for r in all_records if r["relation"]["relation"] == "AMENDS")
         assert amended_record["schema_valid"] is True
         assert amended_record["ontology_valid"] is True
         assert amended_record["relation"]["properties"]["effective_from"] == "2021-01-01"

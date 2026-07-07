@@ -1,7 +1,7 @@
 """Pydantic models cho output của Hierarchy Parser.
 
 Khớp đúng Output Format quy định trong plans/04_graph_construction_pipeline.md
-và ID Convention trong plans/02_ontology_specification.md. Các model này được
+và ID Convention trong plans/legal_ontology.md. Các model này được
 tái dùng làm input cho LLM Extraction (extraction/llm_extractor.py) để tránh
 định nghĩa schema trùng lặp ở nhiều tầng.
 """
