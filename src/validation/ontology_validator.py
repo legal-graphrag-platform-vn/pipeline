@@ -123,10 +123,7 @@ CONSTRAINTS: dict[str, dict] = {
         ],
     },
     "REQUIRES": {
-        "valid_pairs": [
-            ("Entity", "Concept"),
-            ("Entity", "Entity"),
-        ],
+        "valid_pairs": [("Entity", "Concept")],
     },
 }
 

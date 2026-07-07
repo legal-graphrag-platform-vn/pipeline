@@ -30,6 +30,12 @@ def test_requires_not_rejected() -> None:
     assert ok, f"REQUIRES bị reject: {err}"
 
 
+def test_requires_entity_to_entity_rejected() -> None:
+    ok, err = validate_relation("Entity", "REQUIRES", "Entity")
+    assert not ok
+    assert "Invalid pair" in (err or "")
+
+
 def test_replaces_document_only() -> None:
     """REPLACES chỉ hợp lệ ở cấp Document theo ontology canonical."""
     ok, err = validate_relation(

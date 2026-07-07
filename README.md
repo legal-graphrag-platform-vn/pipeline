@@ -20,37 +20,25 @@ python main.py extract --doc-id LDN2020   # cần GEMINI_API_KEY
 python -m pytest tests/ -v
 ```
 
-## Parse trực tiếp từ PDF (vd PDF gốc tải tay từ vbpl.vn)
+## Parse từ raw text
 
-Ngoài luồng `crawl` (lấy text từ HTML body), có thể parse thẳng một file PDF đã tải
-sẵn — kể cả PDF dạng **scan/ảnh** (không có text layer), tự động OCR bằng Tesseract:
+Luồng hiện tại không parse PDF trực tiếp. `parse` đọc raw text đã crawl ở
+`data/raw/<doc_id>/source.txt` và metadata đi kèm ở `metadata.json`.
 
 ```bash
-python main.py parse --doc-id LDN2020 --pdf data/VanBanGoc_59.signed.pdf \
+python main.py crawl --url "https://vbpl.vn/van-ban/chi-tiet/luat-doanh-nghiep-so-59-2020-qh14--142881" \
+    --doc-id LDN2020 --number "59/2020/QH14"
+python main.py parse --doc-id LDN2020
+```
+
+Nếu muốn parse một file `.txt` riêng, dùng `--txt` cùng `--doc-id`:
+
+```bash
+python main.py parse --doc-id LDN2020 --txt data/custom/source.txt \
     --number "59/2020/QH14" --title "Luật Doanh nghiệp 2020"
 ```
 
-`parse_pdf()` tự phát hiện PDF có text layer hay không (đo số ký tự trích được
-trung bình mỗi trang); nếu không đủ (PDF scan) sẽ tự fallback sang OCR.
-
-Nếu PDF chắc chắn có text layer thật (bôi đen/copy được, không phải bản scan),
-dùng `--backend pypdf` để trích bằng `pypdf` thay vì PyMuPDF — nhanh hơn, không
-cần OCR, chính xác gần như tuyệt đối với PDF dạng này:
-
-```bash
-python main.py parse --doc-id LDN762025QH15 --pdf data/LDN762025QH15.pdf \
-    --number "76/2025/QH15" --title "..." --backend pypdf
-```
-
-**Yêu cầu cài Tesseract OCR engine** (binary riêng, không cài qua `pip`):
-
-- Windows: tải installer tại https://github.com/UB-Mannheim/tesseract/wiki (cần quyền
-  admin), nhớ tick chọn gói ngôn ngữ **Vietnamese (vie)** lúc cài, hoặc cài qua
-  Chocolatey: `choco install tesseract -y` (chạy terminal với quyền Administrator).
-- Nếu Tesseract không nằm trong `PATH`, set đường dẫn trong code/`.env`:
-  `pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"`.
-- Kiểm tra cài thành công: `tesseract --version` và `tesseract --list-langs` (phải
-  thấy `vie` trong danh sách).
+Không có `--pdf`, `--backend pypdf`, hay OCR fallback trong CLI hiện tại.
 
 ## Lấy Gemini API key
 
