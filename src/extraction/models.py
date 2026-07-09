@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EntityType = Literal["Document", "Article", "Clause", "Point", "Concept", "Entity", "Action"]
+EntityType = Literal["Document", "Chapter", "Article", "Clause", "Point", "Concept", "Entity", "Action"]
 
 # Canonical active-voice relation types from plans/legal_ontology.md v1.4.0.
 RelationType = Literal[

@@ -24,9 +24,11 @@ def test_parse_cli_single_folder(tmp_path: Path) -> None:
     (doc_raw_dir / "source.txt").write_text("Điều 1. Phạm vi điều chỉnh\nLuật này quy định...", encoding="utf-8")
     metadata = {
         "doc_id": doc_id,
+        "graph_id": "ldn_2020",
         "title": "Luật Doanh nghiệp 2020",
         "number": "59/2020/QH14",
-        "doc_type": "Law",
+        "type": "Law",
+        "issuer_name": "Quốc hội",
         "status": "active"
     }
     (doc_raw_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
@@ -45,7 +47,12 @@ def test_parse_cli_single_folder(tmp_path: Path) -> None:
         assert processed_file.exists()
         
         parsed_data = json.loads(processed_file.read_text(encoding="utf-8"))
-        assert parsed_data["document"]["id"] == doc_id
+        assert parsed_data["document"]["id"] == "ldn_2020"
+        assert parsed_data["document"]["doc_type"] == "Law"
+        assert parsed_data["document"]["normative"] is True
+        assert parsed_data["document"]["issuer_name"] == "Quốc hội"
+        assert parsed_data["document"]["legal_status"] == "ACTIVE"
+        assert "status" not in parsed_data["document"]
         assert len(parsed_data["articles"]) == 1
         assert parsed_data["articles"][0]["number"] == 1
 

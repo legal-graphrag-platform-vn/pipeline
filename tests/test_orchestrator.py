@@ -16,7 +16,7 @@ def test_process_article_temporal_relations_properties() -> None:
         content_raw="Khoản 1. Không được thành lập doanh nghiệp...",
     )
     document = DocumentInfo(
-        id="LDN2020",
+        id="ldn_2020",
         title="Luật Doanh nghiệp",
         number="59/2020/QH14",
         doc_type="Law",
@@ -45,6 +45,13 @@ def test_process_article_temporal_relations_properties() -> None:
             evidence="Công ty phải có vốn",
             confidence=0.8,
         ),
+        ExtractedRelation(
+            head="dieu_17",
+            relation="REFERS_TO",
+            tail="dieu_18",
+            evidence="Theo Điều 18 của Luật này",
+            confidence=0.7,
+        ),
     ]
     mock_result = ExtractionResult(
         article_number=17,
@@ -57,17 +64,25 @@ def test_process_article_temporal_relations_properties() -> None:
         all_records = []
         process_article(article, document, all_records)
 
-        # 4.   Verify that two relations were processed and logged correctly
-        assert len(all_records) == 2
+        # 4.   Verify that all relations were processed and logged correctly
+        assert len(all_records) == 3
 
         # 5.   Check AMENDS relation properties and validation state
         amended_record = next(r for r in all_records if r["relation"]["relation"] == "AMENDS")
         assert amended_record["schema_valid"] is True
         assert amended_record["ontology_valid"] is True
         assert amended_record["relation"]["properties"]["effective_from"] == "2021-01-01"
-        assert amended_record["relation"]["properties"]["source_doc_id"] == "LDN2020"
+        assert amended_record["relation"]["properties"]["source_doc_id"] == "ldn_2020"
 
         # 6.   Check REQUIRES relation properties
         requires_record = next(r for r in all_records if r["relation"]["relation"] == "REQUIRES")
-        assert requires_record["relation"]["properties"]["source_article"] == "LDN2020_D17"
-        assert requires_record["relation"]["properties"]["effective_from"] == "2021-01-01"
+        assert requires_record["relation"]["properties"]["source_article"] == "ldn_2020_art17"
+        assert requires_record["relation"]["properties"]["confidence"] == 0.8
+        assert requires_record["relation"]["properties"]["llm_model"] == "gemini:gemini-2.5-flash"
+        assert requires_record["relation"]["properties"]["created_at"]
+
+        # 7.   Check REFERS_TO citation properties
+        refers_record = next(r for r in all_records if r["relation"]["relation"] == "REFERS_TO")
+        assert refers_record["ontology_valid"] is True
+        assert refers_record["relation"]["properties"]["citation_text"] == "Theo Điều 18 của Luật này"
+        assert refers_record["relation"]["properties"]["citation_type"] == "DIRECT"

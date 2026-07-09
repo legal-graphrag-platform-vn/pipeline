@@ -15,6 +15,7 @@ toàn có chủ đích, không phải bug.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.config import settings
@@ -31,6 +32,48 @@ logger = logging.getLogger(__name__)
 
 def _entity_type_lookup(entities: list[ExtractedEntity]) -> dict[str, str]:
     return {e.id: e.type for e in entities}
+
+
+def _ontology_label(extraction_label: str) -> str:
+    return {
+        "Entity": "LegalSubject",
+        "Concept": "LegalConcept",
+        "Action": "LegalAction",
+    }.get(extraction_label, extraction_label)
+
+
+def _configured_llm_model() -> str:
+    provider = settings.llm_provider.lower()
+    model_by_provider = {
+        "gemini": settings.gemini_model,
+        "minimax": settings.minimax_model,
+        "qwen": settings.qwen_model,
+        "openai": settings.openai_model,
+        "ollama": settings.ollama_model,
+    }
+    model = model_by_provider.get(provider, "")
+    return f"{provider}:{model}" if model else provider
+
+
+def _relation_properties(raw_relation, article: Article, document: DocumentInfo) -> dict:
+    relation_properties = {}
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    if raw_relation.relation in {"AMENDS", "REPEALS", "REPLACES"} and document.effective_from:
+        relation_properties["effective_from"] = str(document.effective_from)
+    if raw_relation.relation == "AMENDS":
+        relation_properties["source_doc_id"] = document.id
+    if raw_relation.relation == "REFERS_TO":
+        relation_properties["citation_text"] = raw_relation.evidence
+        relation_properties["citation_type"] = "DIRECT"
+    if raw_relation.relation in {"DEFINES", "REGULATES", "REQUIRES"}:
+        relation_properties["confidence"] = raw_relation.confidence
+        relation_properties["llm_model"] = _configured_llm_model()
+        relation_properties["created_at"] = created_at
+    if raw_relation.relation == "REQUIRES":
+        relation_properties["source_article"] = f"{document.id}_art{article.number}"
+
+    return relation_properties
 
 
 def process_article(
@@ -52,19 +95,13 @@ def process_article(
         parsed_relation, schema_err = validate_schema(relation_dict)
         schema_valid = parsed_relation is not None
 
-        head_type = entity_types.get(raw_relation.head, "Entity")
-        tail_type = entity_types.get(raw_relation.tail, "Entity")
+        head_type = _ontology_label(entity_types.get(raw_relation.head, "Entity"))
+        tail_type = _ontology_label(entity_types.get(raw_relation.tail, "Entity"))
         head_doc_type = document.doc_type if head_type == "Document" else None
         tail_doc_type = document.doc_type if tail_type == "Document" else None
 
         # 1.   Construct actual relationship properties from document metadata and context
-        relation_properties = {}
-        if document.effective_from:
-            relation_properties["effective_from"] = str(document.effective_from)
-        if raw_relation.relation == "AMENDS":
-            relation_properties["source_doc_id"] = document.id
-        elif raw_relation.relation == "REQUIRES":
-            relation_properties["source_article"] = f"{document.id}_D{article.number}"
+        relation_properties = _relation_properties(raw_relation, article, document)
 
         # 2.   Enrich the relation dictionary with actual properties
         relation_dict["properties"] = relation_properties

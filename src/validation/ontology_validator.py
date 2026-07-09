@@ -1,19 +1,11 @@
 """Ontology Validator — Step 4 of the extraction pipeline.
 
-This validator accepts the pre-writer extraction labels (`Entity`, `Concept`,
-`Action`) but enforces the canonical active-voice relation vocabulary from
-plans/legal_ontology.md v1.4.0.
+This validator accepts canonical ontology labels only. The orchestrator maps
+pre-writer extraction labels (`Entity`, `Concept`, `Action`) to
+`LegalSubject`, `LegalConcept`, and `LegalAction` before Step 4 validation.
 """
 
 from __future__ import annotations
-
-DOCUMENT_LEVELS: dict[str, int] = {
-    "Law": 3,
-    "Resolution": 3,
-    "Decree": 2,
-    "Decision": 2,
-    "Circular": 1,
-}
 
 GUIDES_WHITELIST: set[tuple[str, str]] = {
     ("Constitution", "Law"),
@@ -53,6 +45,8 @@ RELATION_ENUM: set[str] = {
 CONSTRAINTS: dict[str, dict] = {
     "CONTAINS": {
         "valid_pairs": [
+            ("Document", "Chapter"),
+            ("Chapter", "Article"),
             ("Document", "Article"),
             ("Article", "Clause"),
             ("Clause", "Point"),
@@ -107,23 +101,27 @@ CONSTRAINTS: dict[str, dict] = {
             ("Point", "Point"),
             ("Point", "Document"),
         ],
+        "required_properties": ["citation_text", "citation_type"],
     },
     "DEFINES": {
         "valid_pairs": [
-            ("Article", "Concept"),
-            ("Clause", "Concept"),
+            ("Article", "LegalConcept"),
+            ("Clause", "LegalConcept"),
         ],
+        "required_properties": ["confidence", "llm_model", "created_at"],
     },
     "REGULATES": {
         "valid_pairs": [
-            ("Article", "Entity"),
-            ("Article", "Action"),
-            ("Clause", "Entity"),
-            ("Clause", "Action"),
+            ("Article", "LegalSubject"),
+            ("Article", "LegalAction"),
+            ("Clause", "LegalSubject"),
+            ("Clause", "LegalAction"),
         ],
+        "required_properties": ["confidence", "llm_model", "created_at"],
     },
     "REQUIRES": {
-        "valid_pairs": [("Entity", "Concept")],
+        "valid_pairs": [("LegalSubject", "LegalConcept")],
+        "required_properties": ["confidence", "llm_model", "created_at"],
     },
 }
 
@@ -136,8 +134,6 @@ def validate_relation(
     head_id: str | None = None,
     tail_id: str | None = None,
     properties: dict | None = None,
-    head_doc_level: int | None = None,
-    tail_doc_level: int | None = None,
     head_doc_type: str | None = None,
     tail_doc_type: str | None = None,
 ) -> tuple[bool, str | None]:
@@ -166,18 +162,19 @@ def validate_relation(
     required_props = constraint.get("required_properties", [])
     if required_props:
         props = properties or {}
-        missing = [p for p in required_props if not props.get(p)]
+        missing = [p for p in required_props if p not in props or props[p] is None or props[p] == ""]
         if missing:
             return False, f"Missing required properties for {relation}: {missing}"
 
+    if relation == "REFERS_TO":
+        citation_type = (properties or {}).get("citation_type")
+        if citation_type not in {"DIRECT", "INDIRECT", "RANGE"}:
+            return False, f"Invalid citation_type for REFERS_TO: {citation_type}"
+
     if relation == "GUIDES":
-        if head_doc_type is not None and tail_doc_type is not None:
-            if (head_doc_type, tail_doc_type) not in GUIDES_WHITELIST:
-                return False, f"GUIDES does not allow {head_doc_type} -> {tail_doc_type}"
-            return True, None
-        if head_doc_level is None or tail_doc_level is None:
+        if head_doc_type is None or tail_doc_type is None:
             return False, "GUIDES requires head_doc_type and tail_doc_type"
-        if not head_doc_level > tail_doc_level:
-            return False, f"GUIDES violates head_doc_level > tail_doc_level ({head_doc_level} <= {tail_doc_level})"
+        if (head_doc_type, tail_doc_type) not in GUIDES_WHITELIST:
+            return False, f"GUIDES does not allow {head_doc_type} -> {tail_doc_type}"
 
     return True, None

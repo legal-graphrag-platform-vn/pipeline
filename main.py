@@ -34,6 +34,35 @@ logger = logging.getLogger(__name__)
 app = typer.Typer(help="Legal GraphRAG — Graph Construction Pipeline (Milestone 1+2)")
 
 
+def _legal_status_from_raw(raw_status: str | None) -> str:
+    normalized = (raw_status or "active").strip().lower()
+    if normalized in {"active", "còn hiệu lực", "con hieu luc"}:
+        return "ACTIVE"
+    if normalized in {"chưa có hiệu lực", "chua co hieu luc"}:
+        return "NOT_YET_EFFECTIVE"
+    if normalized in {"hết hiệu lực một phần", "het hieu luc mot phan"}:
+        return "PARTIALLY_EFFECTIVE"
+    if normalized in {"hết hiệu lực toàn bộ", "het hieu luc toan bo"}:
+        return "EXPIRED"
+    return "ACTIVE"
+
+
+def _document_info_from_metadata(meta: dict, fallback_id: str | None = None) -> DocumentInfo:
+    return DocumentInfo(
+        id=meta.get("graph_id") or meta.get("doc_id") or fallback_id,
+        title=meta["title"],
+        number=meta["number"],
+        doc_type=meta.get("doc_type") or meta.get("type"),
+        normative=meta.get("normative", True),
+        issued_by=meta.get("issued_by"),
+        issuer_name=meta.get("issuer_name") or meta.get("issued_by"),
+        issued_date=meta.get("issued_date"),
+        effective_from=meta.get("effective_from"),
+        effective_to=meta.get("effective_to"),
+        legal_status=meta.get("legal_status") or _legal_status_from_raw(meta.get("status")),
+    )
+
+
 # Lấy đường dẫn thư mục lưu trữ dữ liệu thô (raw data) của văn bản.
 def _raw_dir(doc_id: str) -> Path:
     return settings.data_raw_dir / doc_id
@@ -56,17 +85,7 @@ def _parse_folder_worker(folder_name: str) -> bool:
             return False
 
         meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-        doc_info = DocumentInfo(
-            id=meta["doc_id"],
-            title=meta["title"],
-            number=meta["number"],
-            doc_type=meta["doc_type"],
-            issued_by=meta.get("issued_by"),
-            issued_date=meta.get("issued_date"),
-            effective_from=meta.get("effective_from"),
-            effective_to=meta.get("effective_to"),
-            status=meta.get("status", "active"),
-        )
+        doc_info = _document_info_from_metadata(meta, fallback_id=folder_name)
 
         text = source_path.read_text(encoding="utf-8")
         parsed = parse_text(text, doc_info)
@@ -143,17 +162,7 @@ def parse(
         metadata_path = settings.data_raw_dir / doc_id / "metadata.json"
         if metadata_path.exists():
             meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-            doc_info = DocumentInfo(
-                id=meta["doc_id"],
-                title=meta["title"],
-                number=meta["number"],
-                doc_type=meta["doc_type"],
-                issued_by=meta.get("issued_by"),
-                issued_date=meta.get("issued_date"),
-                effective_from=meta.get("effective_from"),
-                effective_to=meta.get("effective_to"),
-                status=meta.get("status", "active"),
-            )
+            doc_info = _document_info_from_metadata(meta, fallback_id=doc_id)
         else:
             if not number:
                 typer.echo(
@@ -166,7 +175,8 @@ def parse(
                 title=title or doc_id,
                 number=number,
                 doc_type="Law",
-                status="active",
+                normative=True,
+                legal_status="ACTIVE",
             )
 
         text = txt.read_text(encoding="utf-8")
@@ -190,17 +200,7 @@ def parse(
             raise typer.Exit(code=1)
 
         meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-        doc_info = DocumentInfo(
-            id=meta["doc_id"],
-            title=meta["title"],
-            number=meta["number"],
-            doc_type=meta["doc_type"],
-            issued_by=meta.get("issued_by"),
-            issued_date=meta.get("issued_date"),
-            effective_from=meta.get("effective_from"),
-            effective_to=meta.get("effective_to"),
-            status=meta.get("status", "active"),
-        )
+        doc_info = _document_info_from_metadata(meta, fallback_id=doc_id)
 
         text = source_path.read_text(encoding="utf-8")
         parsed = parse_text(text, doc_info)

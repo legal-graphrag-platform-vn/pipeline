@@ -7,6 +7,13 @@ Tốc độ: <1ms, không cần DB hay LLM.
 from src.validation.ontology_validator import CONSTRAINTS, RELATION_ENUM, validate_relation
 
 
+SEMANTIC_PROPS = {
+    "confidence": 0.8,
+    "llm_model": "gemini:gemini-2.5-flash",
+    "created_at": "2026-07-09T00:00:00+00:00",
+}
+
+
 def test_all_relations_have_constraints() -> None:
     """Mọi relation trong enum phải có đúng 1 key trong CONSTRAINTS."""
     missing = RELATION_ENUM - set(CONSTRAINTS.keys())
@@ -21,19 +28,54 @@ def test_no_orphan_constraints() -> None:
 
 def test_refers_to_not_rejected() -> None:
     """REFERS_TO là relation phổ biến nhất — phải pass validator."""
-    ok, err = validate_relation("Article", "REFERS_TO", "Article")
+    ok, err = validate_relation(
+        "Article",
+        "REFERS_TO",
+        "Article",
+        properties={"citation_text": "theo Điều 17", "citation_type": "DIRECT"},
+    )
     assert ok, f"REFERS_TO bị reject: {err}"
 
 
+def test_contains_structural_chain_allows_chapter() -> None:
+    ok, err = validate_relation("Document", "CONTAINS", "Chapter")
+    assert ok, f"Document->Chapter bị reject: {err}"
+    ok, err = validate_relation("Chapter", "CONTAINS", "Article")
+    assert ok, f"Chapter->Article bị reject: {err}"
+
+
 def test_requires_not_rejected() -> None:
-    ok, err = validate_relation("Entity", "REQUIRES", "Concept")
+    ok, err = validate_relation("LegalSubject", "REQUIRES", "LegalConcept", properties=SEMANTIC_PROPS)
     assert ok, f"REQUIRES bị reject: {err}"
 
 
 def test_requires_entity_to_entity_rejected() -> None:
-    ok, err = validate_relation("Entity", "REQUIRES", "Entity")
+    ok, err = validate_relation("LegalSubject", "REQUIRES", "LegalSubject", properties=SEMANTIC_PROPS)
     assert not ok
     assert "Invalid pair" in (err or "")
+
+
+def test_semantic_relation_missing_provenance_rejected() -> None:
+    ok, err = validate_relation("LegalSubject", "REQUIRES", "LegalConcept", properties={})
+    assert not ok
+    assert "llm_model" in (err or "")
+
+
+def test_extraction_labels_rejected_at_ontology_boundary() -> None:
+    ok, err = validate_relation("Entity", "REQUIRES", "Concept", properties=SEMANTIC_PROPS)
+    assert not ok
+    assert "Invalid pair" in (err or "")
+
+
+def test_refers_to_invalid_citation_type_rejected() -> None:
+    ok, err = validate_relation(
+        "Article",
+        "REFERS_TO",
+        "Article",
+        properties={"citation_text": "theo Điều 17", "citation_type": "FOO"},
+    )
+    assert not ok
+    assert "citation_type" in (err or "")
 
 
 def test_replaces_document_only() -> None:

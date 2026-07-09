@@ -12,15 +12,6 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-DOCUMENT_LEVELS: dict[str, int] = {
-    "Law": 3,
-    "Resolution": 3,
-    "Decree": 2,
-    "Decision": 2,
-    "Circular": 1,
-}
-
-
 class Point(BaseModel):
     """Điểm — đơn vị nhỏ nhất trong cấu trúc văn bản pháp luật VN."""
 
@@ -50,15 +41,17 @@ class Article(BaseModel):
 class DocumentInfo(BaseModel):
     """Metadata gốc của văn bản (id, số hiệu, ngày tháng)."""
 
-    id: str = Field(description="Document ID theo convention, vd 'LDN2020'")
+    id: str = Field(description="Canonical graph ID theo ontology, vd 'ldn_2020'")
     title: str
     number: str = Field(description="Số hiệu văn bản, vd '59/2020/QH14'")
     doc_type: str = Field(description="Document type: Law|Decree|Circular|Resolution|Decision")
+    normative: bool = Field(default=True, description="True for normative legal documents in the selected corpus")
     issued_by: str | None = None
     issued_date: date | None = None
     effective_from: date | None = None
     effective_to: date | None = None
-    status: str = Field(default="active")
+    issuer_name: str | None = None
+    legal_status: str = Field(default="ACTIVE")
 
 
 class ParsedDocument(BaseModel):

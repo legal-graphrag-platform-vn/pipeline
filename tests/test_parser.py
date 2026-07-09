@@ -8,7 +8,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_law.txt"
 
 def _doc_info() -> DocumentInfo:
     return DocumentInfo(
-        id="LDN2020",
+        id="ldn_2020",
         title="Luật Doanh nghiệp",
         number="59/2020/QH14",
         doc_type="Law",
@@ -87,6 +87,5 @@ def test_should_skip_line() -> None:
     assert should_skip_line("CÔNG BÁO/Số 1175 + 1176/Ngày 30-12-2014") is True
     assert should_skip_line("Điều 1. Phạm vi điều chỉnh") is False
     assert should_skip_line("1. Các doanh nghiệp.") is False
-
 
 
